@@ -2492,7 +2492,8 @@
       "resolved": "https://registry.npmjs.org/@types/cors/-/cors-2.8.13.tgz",
       "integrity": "sha512-RG8AStHlUiV5ysZQKq97copd2UmVYw3/pRMLefISZ3S1hK104Cwm7iLQ3fTKx+lsUH2CE8FlLaYeEA2LSeqYUA==",
       "requires": {
-        "@types/node": "*"
+        "@babel/runtime": "^7.12.5",
+        "tslib": "^2.2.0"
       }
     },
     "@types/node": {
