@@ -63,18 +63,40 @@ module.exports = function (app) {
 
   // books a room
   app.get('/api/roombooking', function (req, res) {
+    let api;
+    if (config.calendarSearch.useGraphAPI === 'true') {
+      api = require('./msgraph/roombooking.js');
+    } else {
+      api = require('./ews/roombooking.js');
+    }
 
     console.log("Route Room Booking");
-    //console.log(req);
 
-    /* var ews = require('./ews/roombooking.js'); */
     var roomEmail = req.query.roomEmail;
     var roomName = req.query.roomName;
     var startTime = req.query.startTime;
     var endTime = req.query.endTime;
+
+    api(function (err) {
+      if (err) {
+        if (err.responseCode === 127) {
+          res.json({
+            error:
+              'Oops, there seems to be an issue with the credentials you have supplied.  Make sure you typed them correctly and that you have access to Exchange Roomlists.'
+          });
+        } else {
+          res.json({
+            error: 'Hmm, there seems to be a weird issue occuring.'
+          });
+        }
+      } else {
+        res.json({
+          success: 'Room booked successfully!'
+        });
+      }
+    }, roomEmail, roomName, startTime, endTime, null, msalClient);
+
     console.log(roomEmail + " | " + roomName + " | " + startTime + " | " + endTime);
-    /*  ews.BookRoom(roomEmail, roomName, startTime, endTime); */
-    res.json({ status: 'Booked' });
   });
 
   // heartbeat-service to check if server is alive
