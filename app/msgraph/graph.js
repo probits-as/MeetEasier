@@ -70,11 +70,13 @@ module.exports = {
         .post(event);
       return response;
 
-      // TODO - Review this code that is mostly added by copilot and not tested 🙈
+      // TODO - Review this ugly code 🙈
     } else if ((bookingType === 'Extend') || (bookingType === 'EndNow')) {
       // Get the events for the room from now and to x days/years in the future
+      const now = new Date();
+      const nowUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
       const queryNowDateTime = new Date();
-      const queryEndDateTime = new Date(now.getTime() + + 576000000);
+      const queryEndDateTime = new Date(queryNowDateTime.getTime() + 576000000);
 
       const response = await client
         .api(`/users/${roomEmail}/calendar/calendarView?startDateTime=${queryNowDateTime.toISOString()}&endDateTime=${queryEndDateTime.toISOString()}`)
@@ -85,16 +87,16 @@ module.exports = {
 
       // Find the meeting that is currently running
       const currentMeeting = response.value.find((meeting) => {
-        const start = new Date(meeting.start.dateTime);
-        const end = new Date(meeting.end.dateTime);
-        return (start < now) && (now < end);
+        const startDateTime = new Date(meeting.start.dateTime);
+        const endDateTime = new Date(meeting.end.dateTime);
+        // Return the meeting if the current time is between the start and end time
+        return (nowUTC.getTime() >= startDateTime.getTime() && nowUTC.getTime() <= endDateTime.getTime());
       }
       );
 
       if (currentMeeting) {
         // Extend the meeting
-        const newEnd = new Date(end);
-        currentMeeting.end.dateTime = newEnd.toISOString();
+        currentMeeting.end.dateTime = end;
         currentMeeting.end.timeZone = 'UTC';
 
         const response = await client
