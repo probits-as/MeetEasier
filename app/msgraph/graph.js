@@ -72,13 +72,15 @@ module.exports = {
 
       // TODO - Review this code that is mostly added by copilot and not tested 🙈
     } else if ((bookingType === 'Extend') || (bookingType === 'EndNow')) {
-      // Find the current meeting
-      const now = new Date();
-      const nowString = now.toISOString();
+      // Get the events for the room from now and to x days/years in the future
+      const queryNowDateTime = new Date();
+      const queryEndDateTime = new Date(now.getTime() + + 576000000);
+
       const response = await client
-        .api(`/users/${roomEmail}/calendar/calendarView?startDateTime=${nowString}&endDateTime=${end}`)
+        .api(`/users/${roomEmail}/calendar/calendarView?startDateTime=${queryNowDateTime.toISOString()}&endDateTime=${queryEndDateTime.toISOString()}`)
         .select('subject,start,end')
-        .orderby('start/dateTime')
+        .orderby('Start/DateTime')
+        .top(parseInt(config.calendarSearch.maxItems))
         .get();
 
       // Find the meeting that is currently running
@@ -107,8 +109,7 @@ module.exports = {
     } else {
       throw new Error(`Invalid booking type: ${bookingType}`);
     }
-  }
-},
+  },
 
   getCalendarView: async (msalClient, email) => {
     const client = getAuthenticatedClient(msalClient);
