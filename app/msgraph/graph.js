@@ -1,5 +1,6 @@
 const graph = require('@microsoft/microsoft-graph-client');
 const config = require('../../config/config');
+const moment = require('moment');
 require('isomorphic-fetch');
 
 // TODO: Move this somewhere else?
@@ -34,41 +35,80 @@ module.exports = {
     return rooms;
   },
 
-  bookRoom: async (msalClient, roomEmail, roomName, start, end, subject, body) => {
+  bookRoom: async (msalClient, roomEmail, roomName, start, end, bookingType, subject, body) => {
     const client = getAuthenticatedClient(msalClient);
-
-    const event = {
-      subject: subject,
-      body: {
-        contentType: 'HTML',
-        content: body
-      },
-      start: {
-        dateTime: start,
-        timeZone: 'UTC'
-      },
-      end: {
-        dateTime: end,
-        timeZone: 'UTC'
-      },
-      location: {
-        displayName: roomEmail
-      },
-      attendees: [
-        {
-          type: 'required',
-          emailAddress: {
-            address: roomEmail
+    if ((bookingType === 'BookNow') || (bookingType === 'BookAfter')) {
+      const event = {
+        subject: subject,
+        body: {
+          contentType: 'HTML',
+          content: body
+        },
+        start: {
+          dateTime: start,
+          timeZone: 'UTC'
+        },
+        end: {
+          dateTime: end,
+          timeZone: 'UTC'
+        },
+        location: {
+          displayName: roomEmail
+        },
+        attendees: [
+          {
+            type: 'required',
+            emailAddress: {
+              address: roomEmail
+            }
           }
-        }
-      ]
-    };
+        ]
+      };
 
-    const response = await client
-      .api(`/users/${roomEmail}/calendar/events`)
-      .post(event);
-    return response;
-  },
+      const response = await client
+        .api(`/users/${roomEmail}/calendar/events`)
+        .post(event);
+      return response;
+
+      // TODO - Review this code that is mostly added by copilot and not tested 🙈
+    } else if ((bookingType === 'Extend') || (bookingType === 'EndNow')) {
+      // Find the current meeting
+      const now = new Date();
+      const nowString = now.toISOString();
+      const response = await client
+        .api(`/users/${roomEmail}/calendar/calendarView?startDateTime=${nowString}&endDateTime=${end}`)
+        .select('subject,start,end')
+        .orderby('start/dateTime')
+        .get();
+
+      // Find the meeting that is currently running
+      const currentMeeting = response.value.find((meeting) => {
+        const start = new Date(meeting.start.dateTime);
+        const end = new Date(meeting.end.dateTime);
+        return (start < now) && (now < end);
+      }
+      );
+
+      if (currentMeeting) {
+        // Extend the meeting
+        const newEnd = new Date(end);
+        currentMeeting.end.dateTime = newEnd.toISOString();
+        currentMeeting.end.timeZone = 'UTC';
+
+        const response = await client
+          .api(`/users/${roomEmail}/calendar/events/${currentMeeting.id}`)
+          .patch(currentMeeting);
+        return response;
+      }
+
+      // No meeting found
+      return null;
+
+    } else {
+      throw new Error(`Invalid booking type: ${bookingType}`);
+    }
+  }
+},
 
   getCalendarView: async (msalClient, email) => {
     const client = getAuthenticatedClient(msalClient);

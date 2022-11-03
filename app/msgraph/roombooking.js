@@ -4,7 +4,7 @@ module.exports = function (callback, roomEmail, roomName, startTime, endTime, bo
   const subject = "Booked by MeetEasier";
   const body = " Room Booked by Room Panel";
 
-  graph.bookRoom(msalClient, roomEmail, roomName, startTime, endTime, subject, body).then(
+  graph.bookRoom(msalClient, roomEmail, roomName, startTime, endTime, bookingType, subject, body).then(
     (res) => {
       callback(null);
       console.log(res);

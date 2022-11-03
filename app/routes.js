@@ -76,6 +76,7 @@ module.exports = function (app) {
     var roomName = req.query.roomName;
     var startTime = req.query.startTime;
     var endTime = req.query.endTime;
+    var bookingType = req.query.bookingType;
 
     api(function (err) {
       if (err) {
@@ -94,9 +95,9 @@ module.exports = function (app) {
           success: 'Room booked successfully!'
         });
       }
-    }, roomEmail, roomName, startTime, endTime, null, msalClient);
+    }, roomEmail, roomName, startTime, endTime, bookingType, msalClient);
 
-    console.log(roomEmail + " | " + roomName + " | " + startTime + " | " + endTime);
+    console.log(roomEmail + " | " + roomName + " | " + startTime + " | " + endTime + " | " + bookingType);
   });
 
   // heartbeat-service to check if server is alive
