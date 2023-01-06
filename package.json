@@ -12,16 +12,15 @@
     "start-ui-dev": "cd ui-react && npm start"
   },
   "dependencies": {
-    "@azure/msal-node": "^1.9.0",
-    "@microsoft/microsoft-graph-client": "^3.0.2",
-    "dotenv": "^16.0.1",
+    "@azure/msal-node": "^1.14.5",
+    "@microsoft/microsoft-graph-client": "^3.0.4",
+    "dotenv": "^16.0.3",
     "ews-javascript-api": "0.11.0",
-    "express": "4.18.1",
+    "express": "4.18.2",
     "grunt": "1.5.3",
     "grunt-contrib-sass": "2.0.0",
     "grunt-contrib-watch": "1.1.0",
     "isomorphic-fetch": "^3.0.0",
-    "msal-node": "^0.0.1-security",
-    "socket.io": "4.5.1"
+    "socket.io": "4.5.4"
   }
 }
