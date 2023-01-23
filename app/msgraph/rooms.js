@@ -37,13 +37,7 @@ module.exports = function (callback, msalClient) {
             // if not in blacklist, proceed as normal; otherwise, skip
             if (!inBlacklist) {
               let room = {};
-
-              // if the email addresses != your corporate domain,
-              // replace email domain with domain
               let email = roomItem.emailAddress;
-              /* email = email.substring(0, email.indexOf('@'));
-              email = email + '@' + auth.domain; */
-
               let roomAlias = roomItem.displayName.toLowerCase().replace(/\s+/g, '-');
 
               room.Roomlist = item.displayName;
@@ -105,8 +99,6 @@ module.exports = function (callback, msalClient) {
       };
 
       roomAddresses.forEach(function (room, index, array) {
-        /* 				var calendarFolderId = new ews.FolderId(ews.WellKnownFolderName.Calendar, new ews.Mailbox(room.Email));
-        var view = new ews.CalendarView(ews.DateTime.Now, ews.DateTime.Now.AddDays(10), 6); */
         graph.getCalendarView(msalClient, room.Email).then(
           (response) => {
             fillRoomData(context, room, response.value);

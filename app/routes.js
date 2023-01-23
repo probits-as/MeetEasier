@@ -10,11 +10,7 @@ module.exports = function(app) {
 	// returns an array of room objects
 	app.get('/api/rooms', function(req, res) {
 		let api;
-		if (config.calendarSearch.useGraphAPI === 'true') {
-			api = require('./msgraph/rooms.js');
-		} else {
-			api = require('./ews/rooms.js');
-		}
+		api = require('./msgraph/rooms.js');
 
 		api(function(err, rooms) {
 			if (err) {
@@ -37,11 +33,7 @@ module.exports = function(app) {
 	// returns an array of roomlist objects
 	app.get('/api/roomlists', function(req, res) {
 		let api;
-		if (config.calendarSearch.useGraphAPI === 'true') {
-			api = require('./msgraph/roomlists.js');
-		} else {
-			api = require('./ews/roomlists.js');
-		}
+		api = require('./msgraph/roomlists.js');
 
 		api(function(err, roomlists) {
 			if (err) {

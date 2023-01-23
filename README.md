@@ -6,8 +6,6 @@ Because why pay money for something you can do yourself?
 
 MeetEasier is a web application that visualizes meeting room availability. It works using Microsoft Graph API in Microsoft 365.
 
-**Note: The Exchange Web Services (EWS) is deprecated and will be removed in the future.**
-
 ![Mockup 1](mockups/mockup-1.jpg)
 
 ---
@@ -90,8 +88,7 @@ This application assumes you have:
 
 ## Root Folder Structure Explained
 
-- `app/` : Routes for MSGRAPH and EWS APIs
-- `app/ews/` : All EWS functionality
+- `app/` : Routes for MSGRAPH APIs
 - `app/msgraph/` : All Microsoft Graph functionality
 - `config/` : All server side configuration settings
 - `scss/` : All styles
@@ -175,7 +172,6 @@ And you're done!
 ### Configure the application
 
 Set enviroment variables, or use a .env file (prefered method). See .env.template for details on what variables are needed.
-You may skip the EWS\_ and DOMAIN variables as this is now deprecated.
 
 - Using a .env file, rename or copy the .env.template file to .env and fill in the values. Run the following comand in the top-level directory of this project:
 
@@ -189,7 +185,6 @@ cp .env.template .env
 export OAUTH_CLIENT_ID=0c9c8ca8-5a1a-11ed-9b6a-0242ac120002 (from step 8 above)
 export OAUTH_AUTHORITY=https://login.microsoftonline.com/00afbbe0-5a1a-11ed-9b6a-0242ac120002 (from step 9 above)
 export OAUTH_CLIENT_SECRET=XuR8Q~OotnWOrUholnAZWu4p~5VplaCBGUZA1a9S (from step 15 above)
-export SEARCH_USE_GRAPHAPI=true
 export SEARCH_MAXROOMLISTS=10
 export SEARCH_MAXDAYS=10
 export SEARCH_MAXITEMS=6
@@ -233,18 +228,9 @@ export SEARCH_MAXITEMS=6
 
 ### Advanced
 
-- All EWS functionality is located in `app/ews`.
 - To change the interval in which the web socket emits, edit the interval time in `app/socket-controller.js`. By default, it is set to 1 minute.
 - To update styles, make sure you install grunt first with `npm install -g grunt-cli`. Then run `grunt` in the root directory to watch for SCSS changes. Use the `.scss` files located in the `/scss` folder.
   - All React components can be locally styled by adding a new `.css` file and importing it into the component itself if you'd prefer to do it that way.
-- In `app/ews/rooms.js`, there is a block of code that may not be necessary but were added as a convenience. Feel free to use it, comment it out, or remove it completely. It was designed for a use case where the email addresses (ex: jsmith@domain.com) do not match the corporate domain (ex: jsmith-enterprise).
-  ```javascript
-  // if the email domain != your corporate domain,
-  // replace email domain with domain from auth config
-  var email = roomItem.Address;
-  email = email.substring(0, email.indexOf("@"));
-  email = email + "@" + auth.domain + ".com";
-  ```
 
 ---
 
@@ -260,7 +246,6 @@ export SEARCH_MAXITEMS=6
 
 ## Resources & Attributions
 
-- [ews-javascript-api](https://github.com/gautamsi/ews-javascript-api)
 - Mockup Images:
   - https://www.anthonyboyd.graphics/mockups/2017/realistic-ipad-pro-mockup-vol-3/
   - https://www.freepik.com/free-psd/business-meeting-with-tv-mockup_1163371.htm

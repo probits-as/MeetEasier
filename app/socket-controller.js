@@ -11,11 +11,7 @@ module.exports = function(io) {
 		if (!isRunning) {
 			(function callAPI() {
 				let api;
-				if (config.calendarSearch.useGraphAPI === 'true') {
-					api = require('./msgraph/rooms.js');
-				} else {
-					api = require('./ews/rooms.js');
-				}
+				api = require('./msgraph/rooms.js');
 
 				api(function(err, result) {
 					if (result) {
