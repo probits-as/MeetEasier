@@ -1,0 +1,9 @@
+node_modules
+ui-react/node_modules
+ui-react/build
+npm-debug.log
+.git
+.gitignore
+.env
+*.md
+.DS_Store
