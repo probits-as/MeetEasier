@@ -3,7 +3,7 @@ module github.com/probits-as/meeteasier
 go 1.27.4
 
 require (
-	github.com/a-h/templ v0.3.977
+	github.com/a-h/templ v0.3.1100
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
