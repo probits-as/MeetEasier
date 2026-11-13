@@ -1,0 +1,356 @@
+package flightboard
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/probits-as/meeteasier/internal/model"
+	"github.com/probits-as/meeteasier/views/layout"
+)
+
+func buildURL(path, tenantSlug string, explicitTenant bool, filter string) string {
+	q := url.Values{}
+	if explicitTenant && tenantSlug != "" {
+		q.Set("tenant", tenantSlug)
+	}
+	if filter != "" && filter != "all" && filter != "roomlist-all" {
+		q.Set("filter", filter)
+	}
+	if encoded := q.Encode(); encoded != "" {
+		return path + "?" + encoded
+	}
+	return path
+}
+
+func formatInitialTimeRange(startMs, endMs int64, showWeekday bool) string {
+	s := time.UnixMilli(startMs).Local()
+	e := time.UnixMilli(endMs).Local()
+	if showWeekday {
+		return fmt.Sprintf("%s - %s", s.Format("02 Mon 15:04"), e.Format("Mon 15:04"))
+	}
+	return fmt.Sprintf("%s - %s", s.Format("15:04"), e.Format("15:04"))
+}
+
+func normalizedFilter(f string) string {
+	f = strings.TrimSpace(strings.ToLower(f))
+	f = strings.TrimPrefix(f, "roomlist-")
+	if f == "all" {
+		return ""
+	}
+	return f
+}
+
+func roomMatchesFilter(room model.Room, activeFilter string) bool {
+	f := normalizedFilter(activeFilter)
+	if f == "" {
+		return true
+	}
+	return room.RoomlistSlug() == f
+}
+
+func statusClass(room model.Room) string {
+	if room.ErrorMessage != "" {
+		return "meeting-error"
+	}
+	if room.Busy {
+		return "meeting-busy"
+	}
+	return "meeting-open"
+}
+
+func statusText(tenant model.Tenant, room model.Room) string {
+	if room.ErrorMessage != "" {
+		return tenant.Theme.Labels.StatusError
+	}
+	if room.Busy {
+		return tenant.Theme.Labels.StatusBusy
+	}
+	return tenant.Theme.Labels.StatusAvailable
+}
+
+func rowCardClass(room model.Room, isCompact bool) string {
+	cls := room.RoomAlias + " meeting-room"
+	if room.Busy {
+		cls += " meeting-room-busy"
+	}
+	if room.ErrorMessage != "" {
+		cls += " meeting-room-error"
+	}
+	if isCompact {
+		cls += " meeting-room-vertical"
+		if room.ErrorMessage == "" {
+			cls += " meeting-room-clickable"
+		}
+	}
+	return cls
+}
+
+func prefixLabel(tenant model.Tenant, isCurrent bool) string {
+	if isCurrent {
+		if strings.TrimSpace(tenant.Theme.Labels.NowPrefix) != "" {
+			return tenant.Theme.Labels.NowPrefix + ": "
+		}
+		return ""
+	}
+	if strings.TrimSpace(tenant.Theme.Labels.NextUp) != "" {
+		return tenant.Theme.Labels.NextUp + ": "
+	}
+	return ""
+}
+
+templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool) {
+	@layout.Base(tenant.Name+" - "+tenant.Theme.Labels.NavbarTitle, tenant) {
+		<div id="page-wrap">
+			@Navbar(tenant, status.Roomlists, activeFilter, explicitTenant)
+			<div
+				id="flightboard-content"
+				class="tracker-wrap"
+				hx-get={ buildURL("/partials/flightboard", tenant.Slug, explicitTenant, activeFilter) }
+				hx-trigger="every 30s"
+				hx-swap="innerHTML"
+			>
+				@FlightboardRows(tenant, status, activeFilter, explicitTenant)
+			</div>
+			if strings.TrimSpace(tenant.Theme.FooterImageURL) != "" {
+				<div class="fb__footer-banner">
+					<img src={ tenant.Theme.FooterImageURL } alt={ tenant.Name }/>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explicitTenant bool) {
+	<div id="title-bar-wrap">
+		<div class="title-bar">
+			<div class="title-bar-left">
+				<ul class="horizontal menu fb__nav-menu">
+					if strings.TrimSpace(tenant.Theme.LogoURL) != "" {
+						<li>
+							<a href={ templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, "")) }>
+								<img src={ tenant.Theme.LogoURL } alt="Logo"/>
+							</a>
+						</li>
+					}
+					<li>
+						<span id="fb__navbar-title">{ tenant.Theme.Labels.NavbarTitle }</span>
+						<br/>
+						<ul id="roomlist-filter" class="dropdown menu fb__dropdown">
+							<li>
+								<a href="#" class="current-filter">
+									{ tenant.Theme.Labels.FilterTitle }
+								</a>
+								<ul class="menu fb__child-dropdown">
+									<li class={ templ.KV("is-active", normalizedFilter(activeFilter) == "") }>
+										<a href={ templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, "")) }>
+											{ tenant.Theme.Labels.FilterAllTitle }
+										</a>
+									</li>
+									for _, rl := range roomlists {
+										<li class={ templ.KV("is-active", normalizedFilter(activeFilter) == model.Slugify(rl)) }>
+											<a href={ templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, model.Slugify(rl))) }>
+												{ rl }
+											</a>
+										</li>
+									}
+								</ul>
+							</li>
+						</ul>
+					</li>
+				</ul>
+			</div>
+			<div class="title-bar-right">
+				<ul class="horizontal menu fb__nav-menu-right">
+					<li id="the-clock">
+						<span id="clock">{ time.Now().Format("15:04:05") }</span>
+					</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+}
+
+templ FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool) {
+	if status.IsStale {
+		<div class="stale-banner">
+			<span>Viser bufret kalenderdata (Microsoft Graph utilgjengelig: { status.LastError })</span>
+			<span>Sist synkronisert: { status.LastSync.Format("15:04:05") }</span>
+		</div>
+	}
+	if status.LastError != "" && len(status.Rooms) == 0 {
+		<div class="row">
+			<div class="credentials-error">
+				Kunne ikke hente møterom: { status.LastError }
+			</div>
+		</div>
+	} else if !status.Initialized && len(status.Rooms) == 0 {
+		<p id="fb__spinner-wrap">
+			<img id="fb__spinner" alt="Loading..." src="/svgs/spinner.svg"/>
+		</p>
+	} else {
+		for _, room := range status.Rooms {
+			if roomMatchesFilter(room, activeFilter) {
+				if tenant.Theme.RowLayout == model.RowLayoutCompact {
+					@compactRow(tenant, room, explicitTenant)
+				} else {
+					@standardRow(tenant, room, explicitTenant)
+				}
+			}
+		}
+	}
+}
+
+templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
+	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
+		<div class="row">
+			<div class="medium-12 columns">
+				<div class={ rowCardClass(room, false) }>
+					<div class="row valign-middle">
+						<div class={ room.RoomAlias + "-status meeting-room__status medium-2 columns" }>
+							<div class={ room.RoomAlias + "-meeting-status " + statusClass(room) } title={ room.ErrorMessage }>
+								{ statusText(tenant, room) }
+							</div>
+						</div>
+						<div class="medium-3 columns">
+							<div class={ room.RoomAlias + "-name meeting-room__name" }>
+								{ room.Name }
+							</div>
+						</div>
+						<div class="medium-6 columns">
+							if len(room.Appointments) > 0 {
+								<div class={ room.RoomAlias + "-meeting-information" }>
+									<div>
+										<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
+											{ prefixLabel(tenant, room.Busy) }
+										</span>
+										<span class={ room.RoomAlias + "-subject meeting-subject" }>
+											{ room.Appointments[0].Subject }
+										</span>
+									</div>
+								</div>
+								<div
+									class={ room.RoomAlias + "-time meeting-time" }
+									data-start-ms={ strconv.FormatInt(room.Appointments[0].Start, 10) }
+									data-end-ms={ strconv.FormatInt(room.Appointments[0].End, 10) }
+									data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
+								>
+									{ formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime) }
+								</div>
+								<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
+									{ room.Appointments[0].Organizer }
+								</div>
+							}
+						</div>
+						<div class="medium-1 columns">
+							<div class="meeting-fullscreen">
+								if room.ErrorMessage == "" {
+									<a href={ templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")) } target="_blank" title={ room.Name }>
+										<svg viewBox="0 0 24 24" aria-hidden="true">
+											<path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"></path>
+										</svg>
+									</a>
+								}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
+	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
+		<div class="row">
+			<div class="medium-12 columns">
+				if room.ErrorMessage == "" {
+					<a
+						class={ rowCardClass(room, true) }
+						href={ templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")) }
+						target="_blank"
+					>
+						@compactRowInner(tenant, room)
+					</a>
+				} else {
+					<div class={ rowCardClass(room, true) }>
+						@compactRowInner(tenant, room)
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ compactRowInner(tenant model.Tenant, room model.Room) {
+	<div class="meeting-room__header">
+		<div class={ room.RoomAlias + "-name meeting-room__name" }>{ room.Name }</div>
+	</div>
+	<div class="meeting-room__content">
+		<div class="meeting-room__status-indicator">
+			<div class={ room.RoomAlias + "-meeting-status " + statusClass(room) } title={ room.ErrorMessage }>
+				{ statusText(tenant, room) }
+			</div>
+		</div>
+		<div class="meeting-room__name-column">
+			<div class={ room.RoomAlias + "-name meeting-room__name" }>{ room.Name }</div>
+		</div>
+		<div class="meeting-room__details">
+			if len(room.Appointments) > 0 {
+				<div class="meeting-room__current">
+					<div class={ room.RoomAlias + "-meeting-information" }>
+						<div>
+							<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
+								{ prefixLabel(tenant, room.Busy) }
+							</span>
+							<span class={ room.RoomAlias + "-subject meeting-subject" }>
+								{ room.Appointments[0].Subject }
+							</span>
+						</div>
+					</div>
+					<div
+						class={ room.RoomAlias + "-time meeting-time" }
+						data-start-ms={ strconv.FormatInt(room.Appointments[0].Start, 10) }
+						data-end-ms={ strconv.FormatInt(room.Appointments[0].End, 10) }
+						data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
+					>
+						{ formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime) }
+					</div>
+					<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
+						{ room.Appointments[0].Organizer }
+					</div>
+				</div>
+			}
+		</div>
+		if room.Busy && len(room.Appointments) > 1 {
+			<div class="meeting-room__details meeting-room__details--next">
+				<div class="meeting-room__next">
+					<div class={ room.RoomAlias + "-meeting-information" }>
+						<div>
+							<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
+								{ prefixLabel(tenant, false) }
+							</span>
+							<span class={ room.RoomAlias + "-subject meeting-subject" }>
+								{ room.Appointments[1].Subject }
+							</span>
+						</div>
+					</div>
+					<div
+						class={ room.RoomAlias + "-time meeting-time" }
+						data-start-ms={ strconv.FormatInt(room.Appointments[1].Start, 10) }
+						data-end-ms={ strconv.FormatInt(room.Appointments[1].End, 10) }
+						data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
+					>
+						{ formatInitialTimeRange(room.Appointments[1].Start, room.Appointments[1].End, tenant.Theme.ShowWeekdayInTime) }
+					</div>
+					<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
+						{ room.Appointments[1].Organizer }
+					</div>
+				</div>
+			</div>
+		}
+	</div>
+}
+

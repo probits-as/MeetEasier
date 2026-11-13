@@ -1,0 +1,144 @@
+package singleroom
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/probits-as/meeteasier/internal/model"
+	"github.com/probits-as/meeteasier/views/layout"
+)
+
+func singleRoomPartialURL(alias, tenantSlug string, explicitTenant bool) string {
+	path := "/partials/single-room/" + url.PathEscape(alias)
+	if explicitTenant && tenantSlug != "" {
+		return path + "?tenant=" + url.QueryEscape(tenantSlug)
+	}
+	return path
+}
+
+func formatSingleRoomTime(startMs, endMs int64) string {
+	s := time.UnixMilli(startMs).Local()
+	e := time.UnixMilli(endMs).Local()
+	return fmt.Sprintf("%s - %s", s.Format("02 Mon 15:04"), e.Format("Mon 15:04"))
+}
+
+func nextUpLabel(tenant model.Tenant, busy bool) string {
+	if busy {
+		return ""
+	}
+	if strings.TrimSpace(tenant.Theme.Labels.NextUp) != "" {
+		return tenant.Theme.Labels.NextUp + ": "
+	}
+	return ""
+}
+
+templ SingleRoomPage(tenant model.Tenant, room model.Room, alias string, found bool, initialized bool, explicitTenant bool) {
+	@layout.Base(roomTitle(tenant, room, alias, found), tenant) {
+		<div
+			id="single-room__wrap"
+			hx-get={ singleRoomPartialURL(alias, tenant.Slug, explicitTenant) }
+			hx-trigger="every 30s"
+			hx-swap="innerHTML"
+		>
+			@SingleRoomContent(tenant, room, found, initialized)
+		</div>
+	}
+}
+
+func roomTitle(tenant model.Tenant, room model.Room, alias string, found bool) string {
+	if found && room.Name != "" {
+		return room.Name + " - " + tenant.Name
+	}
+	return alias + " - " + tenant.Name
+}
+
+templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initialized bool) {
+	if !initialized && !found {
+		<p id="fb__spinner-wrap">
+			<img id="fb__spinner" alt="Loading..." src="/svgs/spinner.svg"/>
+		</p>
+	} else if !found {
+		<div id="error-wrap">
+			<div id="error-text">
+				<div id="error-header">Sorry :(</div>
+				Either there was an error in processing or this room does not exist.
+			</div>
+		</div>
+	} else {
+		<div class="row expanded full-height">
+			<div class={ "columns small-8 left-col", templ.KV("busy", room.Busy), templ.KV("open", !room.Busy) }>
+				<div id="single-room__room-name">{ room.Name }</div>
+				<div id="single-room__room-status">
+					if room.Busy {
+						{ tenant.Theme.Labels.StatusBusy }
+					} else {
+						{ tenant.Theme.Labels.StatusAvailable }
+					}
+				</div>
+				<div id="single-room__details">
+					if len(room.Appointments) > 0 {
+						<div id="single-room__meeting-title">
+							<span id="single-room__next-up">{ nextUpLabel(tenant, room.Busy) }</span>
+							<span id="single-room__meeting-subject">{ room.Appointments[0].Subject }</span>
+						</div>
+					}
+				</div>
+				<div
+					id="single-room__meeting-time"
+					if len(room.Appointments) > 0 {
+						data-start-ms={ strconv.FormatInt(room.Appointments[0].Start, 10) }
+						data-end-ms={ strconv.FormatInt(room.Appointments[0].End, 10) }
+						data-show-weekday="true"
+					}
+				>
+					if len(room.Appointments) > 0 {
+						{ formatSingleRoomTime(room.Appointments[0].Start, room.Appointments[0].End) }
+					}
+				</div>
+				<div id="single-room__meeting-organizer">
+					if len(room.Appointments) > 0 {
+						{ room.Appointments[0].Organizer }
+					}
+				</div>
+			</div>
+			<div class="columns small-4 right-col">
+				<div id="single-room__clock-wrap">
+					<div id="single-room__clock">
+						<div id="single-room__time">{ time.Now().Format("15:04") }</div>
+						<div id="single-room__date">{ time.Now().Format("January 02") }</div>
+					</div>
+				</div>
+				<div id="upcoming-title">{ tenant.Theme.Labels.UpcomingTitle }</div>
+				<table>
+					if len(room.Appointments) > 1 {
+						for _, appt := range room.Appointments[1:] {
+							<tr>
+								<td class="up__meeting-title">{ appt.Subject }</td>
+								<td
+									class="up__meeting-time"
+									width="44%"
+									data-start-ms={ strconv.FormatInt(appt.Start, 10) }
+									data-end-ms={ strconv.FormatInt(appt.End, 10) }
+									data-show-weekday="true"
+								>
+									if appt.Start > 0 && appt.End > 0 {
+										{ formatSingleRoomTime(appt.Start, appt.End) }
+									}
+								</td>
+							</tr>
+						}
+					}
+				</table>
+				if strings.TrimSpace(tenant.Theme.SingleRoomLogoURL) != "" {
+					<div id="logo">
+						<img src={ tenant.Theme.SingleRoomLogoURL } alt={ tenant.Name + " logo" }/>
+					</div>
+				}
+			</div>
+		</div>
+	}
+}
+

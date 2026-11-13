@@ -1,0 +1,150 @@
+package layout
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/probits-as/meeteasier/internal/model"
+)
+
+var unsafeCSSValueRe = regexp.MustCompile(`[^a-zA-Z0-9#(),.\-%\s]`)
+var closingStyleRe = regexp.MustCompile(`(?i)</\s*style`)
+
+func sanitizeCSSVal(val, fallback string) string {
+	v := strings.TrimSpace(val)
+	if v == "" {
+		return fallback
+	}
+	cleaned := unsafeCSSValueRe.ReplaceAllString(v, "")
+	if cleaned == "" {
+		return fallback
+	}
+	return cleaned
+}
+
+func sanitizeCustomCSS(css string) string {
+	return closingStyleRe.ReplaceAllString(css, "")
+}
+
+func buildThemeCSS(t model.Tenant) string {
+	th := t.Theme
+	std := model.DefaultStandardTheme()
+	sb := strings.Builder{}
+	sb.WriteString("<style id=\"tenant-theme-vars\">:root{\n")
+	sb.WriteString(fmt.Sprintf("  --body-bg:%s;\n", sanitizeCSSVal(th.BodyBg, std.BodyBg)))
+	sb.WriteString(fmt.Sprintf("  --card-bg:%s;\n", sanitizeCSSVal(th.CardBg, std.CardBg)))
+	sb.WriteString(fmt.Sprintf("  --card-border:%s;\n", sanitizeCSSVal(th.CardBorder, std.CardBorder)))
+	sb.WriteString(fmt.Sprintf("  --title-bar-bg:%s;\n", sanitizeCSSVal(th.TitleBarBg, std.TitleBarBg)))
+	sb.WriteString(fmt.Sprintf("  --primary-font:%s;\n", sanitizeCSSVal(th.PrimaryFont, std.PrimaryFont)))
+	sb.WriteString(fmt.Sprintf("  --open-color:%s;\n", sanitizeCSSVal(th.OpenColor, std.OpenColor)))
+	sb.WriteString(fmt.Sprintf("  --open-dark-color:%s;\n", sanitizeCSSVal(th.OpenDarkColor, std.OpenDarkColor)))
+	sb.WriteString(fmt.Sprintf("  --busy-color:%s;\n", sanitizeCSSVal(th.BusyColor, std.BusyColor)))
+	sb.WriteString(fmt.Sprintf("  --upcoming-color:%s;\n", sanitizeCSSVal(th.UpcomingColor, std.UpcomingColor)))
+	sb.WriteString(fmt.Sprintf("  --error-color:%s;\n", sanitizeCSSVal(th.ErrorColor, std.ErrorColor)))
+	sb.WriteString(fmt.Sprintf("  --single-room-status-size:%s;\n", sanitizeCSSVal(th.SingleRoomStatusFontSize, std.SingleRoomStatusFontSize)))
+	sb.WriteString("}</style>\n")
+	if strings.TrimSpace(t.CustomCSS) != "" {
+		sb.WriteString("<style id=\"tenant-custom-css\">\n")
+		sb.WriteString(sanitizeCustomCSS(t.CustomCSS))
+		sb.WriteString("\n</style>\n")
+	}
+	return sb.String()
+}
+
+templ Base(title string, tenant model.Tenant) {
+	<!doctype html>
+	<html lang="nb">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+			<title>{ title }</title>
+			<link rel="shortcut icon" href="/favicon.ico"/>
+			<link href="https://fonts.googleapis.com/css?family=Titillium+Web:100,300,400,600,700" rel="stylesheet"/>
+			<link rel="stylesheet" href="/css/styles.css"/>
+			@templ.Raw(buildThemeCSS(tenant))
+			<script src="/js/htmx.min.js" defer></script>
+		</head>
+		<body>
+			{ children... }
+			<script>
+				(function () {
+					function updateClocks() {
+						var now = new Date();
+						var fbClock = document.getElementById('clock');
+						if (fbClock) {
+							fbClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+						}
+						var srTime = document.getElementById('single-room__time');
+						if (srTime) {
+							srTime.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+						}
+						var srDate = document.getElementById('single-room__date');
+						if (srDate) {
+							srDate.textContent = now.toLocaleDateString([], { month: 'long', day: '2-digit' });
+						}
+					}
+
+					function formatTimes() {
+						var els = document.querySelectorAll('[data-start-ms][data-end-ms]');
+						for (var i = 0; i < els.length; i++) {
+							var el = els[i];
+							var start = parseInt(el.getAttribute('data-start-ms'), 10);
+							var end = parseInt(el.getAttribute('data-end-ms'), 10);
+							if (!start || !end) continue;
+							var showWeekday = el.getAttribute('data-show-weekday') === 'true';
+							var sDate = new Date(start);
+							var eDate = new Date(end);
+							if (showWeekday) {
+								el.textContent =
+									sDate.toLocaleTimeString([], { day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit' }) +
+									' - ' +
+									eDate.toLocaleTimeString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+							} else {
+								el.textContent =
+									sDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+									' - ' +
+									eDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+							}
+						}
+					}
+
+					function bindDropdown() {
+						var filterRoot = document.getElementById('roomlist-filter');
+						if (!filterRoot) return;
+						var toggle = filterRoot.querySelector('.current-filter');
+						var parentLi = toggle ? toggle.parentElement : null;
+						if (toggle && parentLi && !toggle.dataset.bound) {
+							toggle.dataset.bound = '1';
+							toggle.addEventListener('click', function (e) {
+								e.preventDefault();
+								parentLi.classList.toggle('is-open');
+							});
+						}
+					}
+
+					document.addEventListener('click', function (e) {
+						var filterRoot = document.getElementById('roomlist-filter');
+						if (filterRoot && !filterRoot.contains(e.target)) {
+							var open = filterRoot.querySelector('.is-open');
+							if (open) open.classList.remove('is-open');
+						}
+					});
+
+					document.addEventListener('DOMContentLoaded', function () {
+						updateClocks();
+						formatTimes();
+						bindDropdown();
+						setInterval(updateClocks, 1000);
+					});
+
+					document.addEventListener('htmx:afterSwap', function () {
+						formatTimes();
+						bindDropdown();
+					});
+				})();
+			</script>
+		</body>
+	</html>
+}
+

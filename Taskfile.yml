@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  default:
+    deps: [build]
+
+  build-templ:
+    desc: Generate Go code from templ templates
+    cmds:
+      - templ generate
+
+  build:
+    desc: Build the MeetEasier binary
+    deps: [build-templ]
+    cmds:
+      - go build -o bin/meeteasier ./cmd/meeteasier
+
+  run:
+    desc: Build and start the server
+    deps: [build]
+    cmds:
+      - ./bin/meeteasier serve
+
+  test:
+    desc: Run all Go tests
+    deps: [build-templ]
+    cmds:
+      - go test -v ./...
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf bin/
+
