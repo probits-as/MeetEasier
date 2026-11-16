@@ -119,6 +119,14 @@ type Translations struct {
 	CustomDomainsEditLabel     string
 	CustomDomainsPlaceholder2  string
 	DomainsHint                string
+	AllowedIPsLabel            string
+	AllowedIPsPlaceholder      string
+	AllowedIPsHint             string
+	ErrInvalidAllowedIPsFmt    string
+	IPBlockedPageTitle         string
+	IPBlockedHeading           string
+	IPBlockedMessage           string
+	IPBlockedClientIPFmt       string
 	PollIntervalLabel          string
 	DefaultTenantCheckbox      string
 	TenantLanguageLabel        string
@@ -318,6 +326,14 @@ var catalog = map[string]Translations{
 		CustomDomainsEditLabel:     "Custom domains (comma-separated, without protocol)",
 		CustomDomainsPlaceholder2:  "rooms.company.com, displays.company.com",
 		DomainsHint:                "Matches HTTP Host header automatically (also supports *.domain.com).",
+		AllowedIPsLabel:            "Allowed IP addresses / CIDR (optional)",
+		AllowedIPsPlaceholder:      "e.g. 195.88.54.10, 10.0.0.0/8, 192.168.1.0/24",
+		AllowedIPsHint:             "Leave empty to allow all IPs. Supports single IPs and CIDR ranges (comma- or line-separated).",
+		ErrInvalidAllowedIPsFmt:    "Invalid IP or CIDR in allowed list: %v",
+		IPBlockedPageTitle:         "Access Restricted",
+		IPBlockedHeading:           "Access restricted by IP address",
+		IPBlockedMessage:           "This conference room display is only accessible from authorized network locations.",
+		IPBlockedClientIPFmt:       "Your IP address: %s",
 		PollIntervalLabel:          "Polling interval (seconds)",
 		DefaultTenantCheckbox:      "Default tenant (fallback when no custom domains match)",
 		TenantLanguageLabel:        "Display / booking language",
@@ -513,6 +529,14 @@ var catalog = map[string]Translations{
 		CustomDomainsEditLabel:     "Custom Domener (kommaseparert, uten protokoll)",
 		CustomDomainsPlaceholder2:  "moterom.kunde.no, skjermer.kunde.no",
 		DomainsHint:                "Matcher HTTP Host-header automatisk (støtter også *.domene.no).",
+		AllowedIPsLabel:            "Tillatte IP-adresser / CIDR (valgfritt)",
+		AllowedIPsPlaceholder:      "f.eks. 195.88.54.10, 10.0.0.0/8, 192.168.1.0/24",
+		AllowedIPsHint:             "La stå tom for å tillate alle IP-adresser. Støtter enkelt-IP og CIDR-nettverk (komma- eller linjeseparert).",
+		ErrInvalidAllowedIPsFmt:    "Ugyldig IP eller CIDR i tilgangslisten: %v",
+		IPBlockedPageTitle:         "Tilgang begrenset",
+		IPBlockedHeading:           "Tilgang begrenset til godkjente nettverk",
+		IPBlockedMessage:           "Denne møteromsvisningen er kun tilgjengelig fra godkjente IP-adresser / nettverk.",
+		IPBlockedClientIPFmt:       "Din IP-adresse: %s",
 		PollIntervalLabel:          "Polling-intervall (sekunder)",
 		DefaultTenantCheckbox:      "Standard-tenant (fallback hvis ingen domener matcher)",
 		TenantLanguageLabel:        "Visnings-/bookingspråk",

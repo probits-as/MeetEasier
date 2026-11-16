@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 	slug TEXT NOT NULL UNIQUE,
 	name TEXT NOT NULL,
 	domains TEXT NOT NULL DEFAULT '',
+	allowed_ips TEXT NOT NULL DEFAULT '',
 	is_default INTEGER NOT NULL DEFAULT 0,
 	provider_type TEXT NOT NULL DEFAULT 'mock',
 	oauth_client_id TEXT NOT NULL DEFAULT '',
@@ -220,6 +221,7 @@ func (s *Store) ensureTenantColumns(ctx context.Context) error {
 		col string
 		ddl string
 	}{
+		{"allowed_ips", `ALTER TABLE tenants ADD COLUMN allowed_ips TEXT NOT NULL DEFAULT ''`},
 		{"language", `ALTER TABLE tenants ADD COLUMN language TEXT NOT NULL DEFAULT ''`},
 		{"booking_enabled", `ALTER TABLE tenants ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0`},
 		{"booking_pin", `ALTER TABLE tenants ADD COLUMN booking_pin TEXT NOT NULL DEFAULT ''`},
@@ -236,7 +238,7 @@ func (s *Store) ensureTenantColumns(ctx context.Context) error {
 	return nil
 }
 
-const tenantSelectCols = `id, slug, name, domains, is_default, provider_type,
+const tenantSelectCols = `id, slug, name, domains, allowed_ips, is_default, provider_type,
 	oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
 	max_days, max_room_lists, max_rooms, max_items, room_blacklist,
 	privacy_mode, language, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
@@ -516,15 +518,15 @@ func (s *Store) CreateTenant(ctx context.Context, t *model.Tenant) error {
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO tenants (
-			slug, name, domains, is_default, provider_type,
+			slug, name, domains, allowed_ips, is_default, provider_type,
 			oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
 			max_days, max_room_lists, max_rooms, max_items, room_blacklist,
 			privacy_mode, language, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
 			theme_preset, theme_json, custom_css, poll_interval_seconds,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
+		t.Slug, t.Name, t.Domains, strings.TrimSpace(t.AllowedIPs), boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
 		t.PrivacyMode, t.Language, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
@@ -616,7 +618,7 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE tenants SET
-			slug = ?, name = ?, domains = ?, is_default = ?, provider_type = ?,
+			slug = ?, name = ?, domains = ?, allowed_ips = ?, is_default = ?, provider_type = ?,
 			oauth_client_id = ?, oauth_authority = ?, oauth_client_secret = ?, exchange_domain = ?,
 			max_days = ?, max_room_lists = ?, max_rooms = ?, max_items = ?, room_blacklist = ?,
 			privacy_mode = ?, language = ?, booking_enabled = ?, booking_pin = ?, booking_organizer_email = ?, booking_default_subject = ?,
@@ -624,7 +626,7 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 			updated_at = ?
 		WHERE id = ?
 	`,
-		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
+		t.Slug, t.Name, t.Domains, strings.TrimSpace(t.AllowedIPs), boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
 		t.PrivacyMode, t.Language, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
@@ -802,7 +804,7 @@ func scanTenant(r rowScanner) (model.Tenant, error) {
 	var isDefaultInt, bookingEnabledInt int
 	var themeJSON string
 	err := r.Scan(
-		&t.ID, &t.Slug, &t.Name, &t.Domains, &isDefaultInt, &t.ProviderType,
+		&t.ID, &t.Slug, &t.Name, &t.Domains, &t.AllowedIPs, &isDefaultInt, &t.ProviderType,
 		&t.OAuthClientID, &t.OAuthAuthority, &t.OAuthClientSecret, &t.ExchangeDomain,
 		&t.MaxDays, &t.MaxRoomLists, &t.MaxRooms, &t.MaxItems, &t.RoomBlacklist,
 		&t.PrivacyMode, &t.Language, &bookingEnabledInt, &t.BookingPIN, &t.BookingOrganizerEmail, &t.BookingDefaultSubject,

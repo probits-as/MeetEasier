@@ -163,3 +163,27 @@ templ Base(title string, tenant model.Tenant, tr i18n.Translations) {
 	</html>
 }
 
+templ AccessDeniedPage(tenant model.Tenant, clientIP string, tr i18n.Translations) {
+	@Base(tenant.Name+" - "+tr.IPBlockedPageTitle, tenant, tr) {
+		<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem;">
+			<div style="max-width:560px; width:100%; background:var(--card-bg, #333333); border:2px solid var(--busy-color, #f04124); border-radius:12px; padding:2.5rem 2rem; text-align:center; color:var(--primary-font, #ffffff); box-shadow:0 12px 32px rgba(0,0,0,0.45);">
+				if strings.TrimSpace(tenant.Theme.LogoURL) != "" {
+					<div style="margin-bottom:1.25rem;">
+						<img src={ tenant.Theme.LogoURL } alt={ tenant.Name } style="max-height:56px; max-width:220px;"/>
+					</div>
+				}
+				<div style="display:inline-flex; align-items:center; justify-content:center; width:56px; height:56px; border-radius:50%; background:rgba(240,65,36,0.18); color:var(--busy-color, #f04124); margin-bottom:1rem;">
+					<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true">
+						<path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.5 1.1 2.5 2.5V11c.55 0 1 .45 1 1v4c0 .55-.45 1-1 1h-5c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1V9.5C9.5 8.1 10.6 7 12 7zm0 1.5c-.55 0-1 .45-1 1V11h2V9.5c0-.55-.45-1-1-1z"></path>
+					</svg>
+				</div>
+				<h1 style="font-size:1.65rem; font-weight:700; margin:0 0 0.75rem 0; color:var(--primary-font, #ffffff);">{ tr.IPBlockedHeading }</h1>
+				<p style="font-size:1.08rem; line-height:1.5; margin:0 0 1.25rem 0; opacity:0.92;">{ tr.IPBlockedMessage }</p>
+				<div style="display:inline-block; padding:0.45rem 0.9rem; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--card-border, #474747); font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.9rem; opacity:0.85;">
+					{ fmt.Sprintf(tr.IPBlockedClientIPFmt, clientIP) }
+				</div>
+			</div>
+		</div>
+	}
+}
+

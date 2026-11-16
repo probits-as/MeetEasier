@@ -871,3 +871,87 @@ func TestHealthProbesAndPrometheusMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestTenantIPAllowlistAndFriendlyBlockedPage(t *testing.T) {
+	srv, st, handler := setupTestServer(t)
+	ctx := context.Background()
+
+	// 1. Empty AllowedIPs allows requests from any IP
+	reqOpen := httptest.NewRequest(http.MethodGet, "/", nil)
+	reqOpen.RemoteAddr = "203.0.113.50:12345"
+	recOpen := httptest.NewRecorder()
+	handler.ServeHTTP(recOpen, reqOpen)
+	if recOpen.Code != http.StatusOK {
+		t.Fatalf("expected 200 when AllowedIPs is empty, got %d", recOpen.Code)
+	}
+
+	// Configure AllowedIPs via tenant update
+	tDef, err := st.GetTenantBySlug(ctx, "default")
+	if err != nil {
+		t.Fatalf("GetTenantBySlug: %v", err)
+	}
+	tDef.AllowedIPs = "10.10.0.0/16, 198.51.100.25"
+	if err := st.UpdateTenant(ctx, &tDef, true); err != nil {
+		t.Fatalf("UpdateTenant: %v", err)
+	}
+	_ = srv.calMgr.ReloadTenants(ctx)
+	srv.calMgr.SyncTenantNow(ctx, tDef)
+
+	// 2. Non-allowlisted IP gets friendly 403 HTML page in English (default) on / and /single-room/*
+	for _, target := range []string{"/", "/single-room/fjord"} {
+		reqBlocked := httptest.NewRequest(http.MethodGet, target, nil)
+		reqBlocked.RemoteAddr = "203.0.113.50:12345"
+		recBlocked := httptest.NewRecorder()
+		handler.ServeHTTP(recBlocked, reqBlocked)
+		body := recBlocked.Body.String()
+		if recBlocked.Code != http.StatusForbidden ||
+			!strings.Contains(body, "Access restricted by IP address") ||
+			!strings.Contains(body, "203.0.113.50") {
+			t.Fatalf("expected friendly English 403 page on %s, got code=%d body=%s", target, recBlocked.Code, body)
+		}
+	}
+
+	// Non-allowlisted IP gets friendly 403 JSON on /api/rooms
+	reqAPIBlocked := httptest.NewRequest(http.MethodGet, "/api/rooms", nil)
+	reqAPIBlocked.RemoteAddr = "203.0.113.50:12345"
+	recAPIBlocked := httptest.NewRecorder()
+	handler.ServeHTTP(recAPIBlocked, reqAPIBlocked)
+	if recAPIBlocked.Code != http.StatusForbidden || !strings.Contains(recAPIBlocked.Body.String(), `"client_ip":"203.0.113.50"`) {
+		t.Fatalf("expected 403 JSON with client_ip on /api/rooms, got code=%d body=%s", recAPIBlocked.Code, recAPIBlocked.Body.String())
+	}
+
+	// Switch tenant language to nb and verify localized Norwegian blocked message
+	tDef.Language = "nb"
+	if err := st.UpdateTenant(ctx, &tDef, true); err != nil {
+		t.Fatalf("UpdateTenant nb: %v", err)
+	}
+	reqBlockedNB := httptest.NewRequest(http.MethodGet, "/", nil)
+	reqBlockedNB.RemoteAddr = "203.0.113.50:12345"
+	recBlockedNB := httptest.NewRecorder()
+	handler.ServeHTTP(recBlockedNB, reqBlockedNB)
+	if recBlockedNB.Code != http.StatusForbidden || !strings.Contains(recBlockedNB.Body.String(), "Tilgang begrenset til godkjente nettverk") {
+		t.Fatalf("expected localized Norwegian 403 message, got code=%d body=%s", recBlockedNB.Code, recBlockedNB.Body.String())
+	}
+
+	// 3. CIDR match and exact IP match are allowed
+	for _, remoteAddr := range []string{"10.10.4.99:54321", "198.51.100.25:443"} {
+		reqAllowed := httptest.NewRequest(http.MethodGet, "/", nil)
+		reqAllowed.RemoteAddr = remoteAddr
+		recAllowed := httptest.NewRecorder()
+		handler.ServeHTTP(recAllowed, reqAllowed)
+		if recAllowed.Code != http.StatusOK {
+			t.Fatalf("expected 200 for allowlisted IP %s, got %d", remoteAddr, recAllowed.Code)
+		}
+	}
+
+	// 4. Health probes, metrics, and /admin are NOT blocked from external IPs
+	for _, ep := range []string{"/healthz", "/livez", "/readyz", "/metrics", "/admin/login"} {
+		reqInfra := httptest.NewRequest(http.MethodGet, ep, nil)
+		reqInfra.RemoteAddr = "203.0.113.50:12345"
+		recInfra := httptest.NewRecorder()
+		handler.ServeHTTP(recInfra, reqInfra)
+		if recInfra.Code != http.StatusOK {
+			t.Fatalf("expected 200 on infra/admin route %s from any IP, got %d", ep, recInfra.Code)
+		}
+	}
+}

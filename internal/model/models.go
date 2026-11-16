@@ -2,6 +2,9 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -186,6 +189,7 @@ type ThemeBundle struct {
 	Slug                string                    `json:"slug,omitempty"`
 	Name                string                    `json:"name,omitempty"`
 	Domains             string                    `json:"domains,omitempty"`
+	AllowedIPs          string                    `json:"allowed_ips,omitempty"`
 	IsDefault           *bool                     `json:"is_default,omitempty"`
 	ProviderType        string                    `json:"provider_type,omitempty"`
 	OAuthClientID       string                    `json:"oauth_client_id,omitempty"`
@@ -214,6 +218,7 @@ type Tenant struct {
 	Slug                string      `json:"slug"`
 	Name                string      `json:"name"`
 	Domains             string      `json:"domains"`
+	AllowedIPs          string      `json:"allowed_ips"`
 	IsDefault           bool        `json:"is_default"`
 	ProviderType        string      `json:"provider_type"`
 	OAuthClientID       string      `json:"oauth_client_id"`
@@ -239,6 +244,83 @@ type Tenant struct {
 	PollIntervalSeconds int         `json:"poll_interval_seconds"`
 	CreatedAt           time.Time   `json:"created_at"`
 	UpdatedAt           time.Time   `json:"updated_at"`
+}
+
+func splitAllowedIPTokens(raw string) []string {
+	normalized := strings.ReplaceAll(raw, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, ",", "\n")
+	var out []string
+	for _, line := range strings.Split(normalized, "\n") {
+		for _, tok := range strings.Fields(line) {
+			if tok != "" {
+				out = append(out, tok)
+			}
+		}
+	}
+	return out
+}
+
+// ValidateAllowedIPs checks that every configured IP or CIDR entry in raw is valid.
+func ValidateAllowedIPs(raw string) error {
+	for _, tok := range splitAllowedIPTokens(raw) {
+		if strings.Contains(tok, "/") {
+			if _, err := netip.ParsePrefix(tok); err != nil {
+				return fmt.Errorf("%q: %w", tok, err)
+			}
+		} else {
+			if _, err := netip.ParseAddr(tok); err != nil {
+				return fmt.Errorf("%q: %w", tok, err)
+			}
+		}
+	}
+	return nil
+}
+
+// ExtractClientIP normalizes a host:port or raw IP string into a clean IP address string.
+func ExtractClientIP(remoteAddr string) string {
+	raw := strings.TrimSpace(remoteAddr)
+	if idx := strings.Index(raw, ","); idx != -1 {
+		raw = strings.TrimSpace(raw[:idx])
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	}
+	raw = strings.Trim(raw, "[]")
+	if addr, err := netip.ParseAddr(raw); err == nil {
+		return addr.Unmap().String()
+	}
+	return raw
+}
+
+// IsIPAllowed returns true if AllowedIPs is empty or if clientIP matches any configured IP or CIDR range.
+func (t Tenant) IsIPAllowed(clientIP string) bool {
+	tokens := splitAllowedIPTokens(t.AllowedIPs)
+	if len(tokens) == 0 {
+		return true
+	}
+	cleanIP := ExtractClientIP(clientIP)
+	addr, err := netip.ParseAddr(cleanIP)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+
+	for _, tok := range tokens {
+		if strings.Contains(tok, "/") {
+			if pfx, err := netip.ParsePrefix(tok); err == nil {
+				if pfx.Masked().Contains(addr) {
+					return true
+				}
+			}
+		} else {
+			if ruleAddr, err := netip.ParseAddr(tok); err == nil {
+				if ruleAddr.Unmap() == addr {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // DomainList returns normalized lowercased hostnames configured for this tenant.

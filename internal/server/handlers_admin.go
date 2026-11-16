@@ -301,6 +301,12 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 		t.Slug = slugVal
 	}
 	t.Domains = strings.TrimSpace(r.FormValue("domains"))
+	allowedIPs := strings.TrimSpace(r.FormValue("allowed_ips"))
+	if err := model.ValidateAllowedIPs(allowedIPs); err != nil {
+		redirectAdmin(w, r, id, "", fmt.Sprintf(tr.ErrInvalidAllowedIPsFmt, err))
+		return
+	}
+	t.AllowedIPs = allowedIPs
 	t.IsDefault = r.FormValue("is_default") == "1"
 	t.Language = i18n.NormalizeTenantLanguage(r.FormValue("language"))
 	t.PollIntervalSeconds = parseIntDefault(r.FormValue("poll_interval_seconds"), 60)

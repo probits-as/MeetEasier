@@ -52,15 +52,16 @@ func (s *Store) BuildThemeBundle(ctx context.Context, t model.Tenant) (model.The
 	}
 
 	bundle := model.ThemeBundle{
-		Version:             1,
-		Slug:                t.Slug,
-		Name:                t.Name,
-		Domains:             t.Domains,
-		MaxDays:             t.MaxDays,
-		MaxRoomLists:        t.MaxRoomLists,
-		MaxRooms:            t.MaxRooms,
-		MaxItems:            t.MaxItems,
-		RoomBlacklist:       t.RoomBlacklist,
+		Version:               1,
+		Slug:                  t.Slug,
+		Name:                  t.Name,
+		Domains:               t.Domains,
+		AllowedIPs:            t.AllowedIPs,
+		MaxDays:               t.MaxDays,
+		MaxRoomLists:          t.MaxRoomLists,
+		MaxRooms:              t.MaxRooms,
+		MaxItems:              t.MaxItems,
+		RoomBlacklist:         t.RoomBlacklist,
 		PollIntervalSeconds:   t.PollIntervalSeconds,
 		PrivacyMode:           t.PrivacyMode,
 		Language:              t.Language,
@@ -102,6 +103,12 @@ func (s *Store) ApplyThemeBundle(ctx context.Context, t *model.Tenant, bundle mo
 		if bundle.IsDefault != nil {
 			t.IsDefault = *bundle.IsDefault
 		}
+	}
+	if strings.TrimSpace(bundle.AllowedIPs) != "" {
+		if err := model.ValidateAllowedIPs(bundle.AllowedIPs); err != nil {
+			return fmt.Errorf("invalid allowed_ips: %w", err)
+		}
+		t.AllowedIPs = strings.TrimSpace(bundle.AllowedIPs)
 	}
 	if strings.TrimSpace(bundle.PrivacyMode) != "" {
 		t.PrivacyMode = strings.TrimSpace(bundle.PrivacyMode)

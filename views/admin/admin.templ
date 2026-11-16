@@ -343,6 +343,11 @@ templ tenantEditor(t model.Tenant, st model.TenantStatus, tr i18n.Translations) 
 				<input type="text" name="domains" value={ t.Domains } placeholder={ tr.CustomDomainsPlaceholder2 }/>
 				<span class="adm-hint">{ tr.DomainsHint }</span>
 			</div>
+			<div class="adm-field full">
+				<label>{ tr.AllowedIPsLabel }</label>
+				<input type="text" name="allowed_ips" value={ t.AllowedIPs } placeholder={ tr.AllowedIPsPlaceholder }/>
+				<span class="adm-hint">{ tr.AllowedIPsHint }</span>
+			</div>
 			<div class="adm-field">
 				<label>{ tr.PollIntervalLabel }</label>
 				<input type="number" name="poll_interval_seconds" min="10" value={ fmt.Sprintf("%d", t.PollIntervalSeconds) }/>

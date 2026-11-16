@@ -16,8 +16,32 @@ import (
 	"github.com/probits-as/meeteasier/internal/model"
 	"github.com/probits-as/meeteasier/internal/store"
 	"github.com/probits-as/meeteasier/views/flightboard"
+	"github.com/probits-as/meeteasier/views/layout"
 	"github.com/probits-as/meeteasier/views/singleroom"
 )
+
+func (s *Server) enforceTenantIPAllowlist(w http.ResponseWriter, r *http.Request, tenant model.Tenant, tr i18n.Translations, isJSON bool) bool {
+	if tenant.IsIPAllowed(r.RemoteAddr) {
+		return true
+	}
+	clientIP := model.ExtractClientIP(r.RemoteAddr)
+	slog.Warn("Blocked request from unauthorized IP",
+		"tenant", tenant.Slug,
+		"client_ip", clientIP,
+		"path", r.URL.Path,
+	)
+	if isJSON {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error":     tr.IPBlockedMessage,
+			"client_ip": clientIP,
+		})
+		return false
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	_ = layout.AccessDeniedPage(tenant, clientIP, tr).Render(r.Context(), w)
+	return false
+}
 
 func (s *Server) handleFlightboardPage(w http.ResponseWriter, r *http.Request) {
 	tenant, explicitTenant, err := s.resolveTenant(r)
@@ -27,9 +51,13 @@ func (s *Server) handleFlightboardPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, false) {
+		return
+	}
+
 	status := s.calMgr.GetStatus(tenant)
 	activeFilter := r.URL.Query().Get("filter")
-	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := flightboard.FlightboardPage(tenant, status, activeFilter, explicitTenant, tr).Render(r.Context(), w); err != nil {
@@ -44,9 +72,13 @@ func (s *Server) handleFlightboardPartial(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, false) {
+		return
+	}
+
 	status := s.calMgr.GetStatus(tenant)
 	activeFilter := r.URL.Query().Get("filter")
-	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := flightboard.FlightboardRows(tenant, status, activeFilter, explicitTenant, tr).Render(r.Context(), w); err != nil {
@@ -61,10 +93,14 @@ func (s *Server) handleSingleRoomPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, false) {
+		return
+	}
+
 	alias := chi.URLParam(r, "alias")
 	status := s.calMgr.GetStatus(tenant)
 	room, found := s.calMgr.GetRoomByAlias(tenant, alias)
-	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	if !found && status.Initialized {
 		w.WriteHeader(http.StatusNotFound)
@@ -82,10 +118,14 @@ func (s *Server) handleSingleRoomPartial(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, false) {
+		return
+	}
+
 	alias := chi.URLParam(r, "alias")
 	status := s.calMgr.GetStatus(tenant)
 	room, found := s.calMgr.GetRoomByAlias(tenant, alias)
-	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := singleroom.SingleRoomContent(tenant, room, found, status.Initialized, explicitTenant, tr, "", "").Render(r.Context(), w); err != nil {
@@ -102,6 +142,9 @@ func (s *Server) handleSingleRoomBook(w http.ResponseWriter, r *http.Request) {
 
 	alias := chi.URLParam(r, "alias")
 	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, false) {
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		room, found := s.calMgr.GetRoomByAlias(tenant, alias)
 		s.renderSingleRoomBookResponse(w, r, tenant, room, alias, found, explicitTenant, tr, "", tr.ErrInvalidRequest, http.StatusBadRequest)
@@ -175,6 +218,9 @@ func (s *Server) handleAPIRoomBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tr := i18n.For(s.tenantLanguage(r, tenant))
+	if !s.enforceTenantIPAllowlist(w, r, tenant, tr, true) {
+		return
+	}
 	room, statusCode, execErr := s.validateAndExecuteBooking(r, tenant, req.RoomAlias, req, tr)
 	if execErr != nil {
 		writeJSON(w, statusCode, map[string]string{"error": execErr.Error()})
@@ -257,6 +303,9 @@ func (s *Server) handleAPIRooms(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to resolve tenant"})
 		return
 	}
+	if !s.enforceTenantIPAllowlist(w, r, tenant, i18n.For(s.tenantLanguage(r, tenant)), true) {
+		return
+	}
 	status := s.calMgr.GetStatus(tenant)
 	if status.LastError != "" && len(status.Rooms) == 0 {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": status.LastError})
@@ -269,6 +318,9 @@ func (s *Server) handleAPIRoomlists(w http.ResponseWriter, r *http.Request) {
 	tenant, _, err := s.resolveTenant(r)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to resolve tenant"})
+		return
+	}
+	if !s.enforceTenantIPAllowlist(w, r, tenant, i18n.For(s.tenantLanguage(r, tenant)), true) {
 		return
 	}
 	status := s.calMgr.GetStatus(tenant)
