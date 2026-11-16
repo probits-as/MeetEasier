@@ -21,6 +21,9 @@ jobs:
               with:
                   go-version-file: go.mod
 
+            - name: Generate templ views
+              run: go run github.com/a-h/templ/cmd/templ@$(go list -m github.com/a-h/templ | awk '{print $2}') generate
+
             - name: Run go vet
               run: go vet ./...
 

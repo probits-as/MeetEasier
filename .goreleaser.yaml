@@ -5,6 +5,7 @@ project_name: meeteasier
 before:
   hooks:
     - go mod download
+    - sh -c "go run github.com/a-h/templ/cmd/templ@$(go list -m github.com/a-h/templ | awk '{print $2}') generate"
 
 builds:
   - id: meeteasier

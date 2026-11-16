@@ -5,9 +5,9 @@ tasks:
     deps: [build]
 
   build-templ:
-    desc: Generate Go code from templ templates
+    desc: Generate Go code from templ templates (matching go.mod version)
     cmds:
-      - templ generate
+      - go run github.com/a-h/templ/cmd/templ@$(go list -m github.com/a-h/templ | awk '{print $2}') generate
 
   build:
     desc: Build the MeetEasier binary

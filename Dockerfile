@@ -2,10 +2,8 @@
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 WORKDIR /src
 
-RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
-
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go install github.com/a-h/templ/cmd/templ@$(go list -m github.com/a-h/templ | awk '{print $2}')
 
 COPY . .
 RUN templ generate

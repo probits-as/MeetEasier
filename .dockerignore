@@ -6,4 +6,5 @@ data/
 dist/
 *.db
 *.md
+*_templ.go
 .DS_Store

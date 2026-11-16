@@ -5,4 +5,5 @@
 *.db
 *.db-wal
 *.db-shm
+*_templ.go
 .DS_Store
