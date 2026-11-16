@@ -484,6 +484,88 @@ func TestBootstrapBundlesAndAdminTenantImport(t *testing.T) {
 	}
 }
 
+func TestSingleRoomTouchBookingWithPINAndMockProvider(t *testing.T) {
+	_, st, handler := setupTestServer(t)
+
+	// 1. Booking disabled by default -> /api/roombooking returns 403
+	reqDisabled := httptest.NewRequest(http.MethodPost, "/api/roombooking", strings.NewReader(`{"room_alias":"midnattssol","action":"book_now","duration_minutes":15}`))
+	reqDisabled.Header.Set("Content-Type", "application/json")
+	recDisabled := httptest.NewRecorder()
+	handler.ServeHTTP(recDisabled, reqDisabled)
+	if recDisabled.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when booking is disabled, got %d", recDisabled.Code)
+	}
+
+	// 2. Enable booking + PIN on default tenant
+	def, err := st.GetDefaultTenant(context.Background())
+	if err != nil {
+		t.Fatalf("GetDefaultTenant: %v", err)
+	}
+	def.BookingEnabled = true
+	def.BookingPIN = "1234"
+	def.BookingDefaultSubject = "Drop-in møte"
+	if err := st.UpdateTenant(context.Background(), &def, true); err != nil {
+		t.Fatalf("UpdateTenant: %v", err)
+	}
+
+	// Verify single-room page renders booking controls & PIN field
+	reqPage := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
+	recPage := httptest.NewRecorder()
+	handler.ServeHTTP(recPage, reqPage)
+	if recPage.Code != http.StatusOK || !strings.Contains(recPage.Body.String(), "Book rommet nå") || !strings.Contains(recPage.Body.String(), `name="pin"`) {
+		t.Fatalf("expected booking panel and PIN input on single room page")
+	}
+
+	// 3. Wrong PIN via HTMX returns inline error and leaves room open
+	formBadPIN := url.Values{"booking_choice": {"book_now:30"}, "pin": {"9999"}}
+	reqBad := httptest.NewRequest(http.MethodPost, "/single-room/midnattssol/book", strings.NewReader(formBadPIN.Encode()))
+	reqBad.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqBad.Header.Set("HX-Request", "true")
+	recBad := httptest.NewRecorder()
+	handler.ServeHTTP(recBad, reqBad)
+	if !strings.Contains(recBad.Body.String(), "Feil PIN-kode") {
+		t.Fatalf("expected Feil PIN-kode error in HTMX response")
+	}
+
+	// 4. Correct PIN books Midnattssol for 30 minutes
+	formOK := url.Values{"booking_choice": {"book_now:30"}, "subject": {"Rask Synk"}, "pin": {"1234"}}
+	reqBook := httptest.NewRequest(http.MethodPost, "/single-room/midnattssol/book", strings.NewReader(formOK.Encode()))
+	reqBook.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqBook.Header.Set("HX-Request", "true")
+	recBook := httptest.NewRecorder()
+	handler.ServeHTTP(recBook, reqBook)
+	bodyBook := recBook.Body.String()
+	if !strings.Contains(bodyBook, "Rommet er booket i 30 minutter") || !strings.Contains(bodyBook, "Rask Synk") || !strings.Contains(bodyBook, "Avslutt nå") {
+		t.Fatalf("expected booked status and End Now button, got: %s", bodyBook)
+	}
+
+	// 5. Extend active booking by 15 min via JSON API
+	reqExt := httptest.NewRequest(http.MethodPost, "/api/roombooking", strings.NewReader(`{"room_alias":"midnattssol","action":"extend","duration_minutes":15,"pin":"1234"}`))
+	reqExt.Header.Set("Content-Type", "application/json")
+	recExt := httptest.NewRecorder()
+	handler.ServeHTTP(recExt, reqExt)
+	if recExt.Code != http.StatusOK {
+		t.Fatalf("expected 200 on extend, got %d: %s", recExt.Code, recExt.Body.String())
+	}
+
+	// 6. End active booking early via JSON API
+	reqEnd := httptest.NewRequest(http.MethodPost, "/api/roombooking", strings.NewReader(`{"room_alias":"midnattssol","action":"end_now","pin":"1234"}`))
+	reqEnd.Header.Set("Content-Type", "application/json")
+	recEnd := httptest.NewRecorder()
+	handler.ServeHTTP(recEnd, reqEnd)
+	if recEnd.Code != http.StatusOK {
+		t.Fatalf("expected 200 on end_now, got %d: %s", recEnd.Code, recEnd.Body.String())
+	}
+
+	// Verify room is now available again
+	reqAfter := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
+	recAfter := httptest.NewRecorder()
+	handler.ServeHTTP(recAfter, reqAfter)
+	if !strings.Contains(recAfter.Body.String(), "Book rommet nå") {
+		t.Fatalf("expected Midnattssol to be available again after end_now")
+	}
+}
+
 func itoa(v int64) string {
 	return url.QueryEscape(strings.TrimSpace(
 		func() string {

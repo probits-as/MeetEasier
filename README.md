@@ -92,7 +92,7 @@ curl -X PUT https://your-host/api/admin/tenants/default/theme \
 ## Microsoft 365 Setup (Graph API)
 
 1. Register an application in Microsoft Entra ID (Azure AD) with **Application permissions**:
-   - `Calendars.Read`
+   - `Calendars.Read` (or `Calendars.ReadWrite` if interactive room booking on `/single-room/<alias>` is enabled)
    - `Place.Read.All`
    - `User.Read.All`
 2. Grant admin consent for your organization.

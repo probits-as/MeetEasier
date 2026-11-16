@@ -372,6 +372,40 @@ templ tenantEditor(t model.Tenant, st model.TenantStatus) {
 				</div>
 			</div>
 
+			<div class="adm-section-title">2b. Rombooking på enkeltrom-skjerm (Touchskjerm)</div>
+			<div class="adm-form-grid">
+				<div class="adm-field full">
+					<label class="adm-checkbox">
+						<input type="checkbox" name="booking_enabled" value="1" checked?={ t.BookingEnabled }/>
+						<span>Aktiver hurtigbooking, forlengelse og «Avslutt nå» på /single-room/* (krever Calendars.ReadWrite i M365)</span>
+					</label>
+				</div>
+				<div class="adm-field">
+					<label for="booking_pin">
+						Booking PIN / passord (valgfritt)
+						if t.HasBookingPIN {
+							<span class="adm-badge ok">PIN aktiv</span>
+						}
+					</label>
+					<input id="booking_pin" name="booking_pin" type="password" placeholder="La stå tom for å beholde eksisterende (tom uten aktiv = åpen skjerm)"/>
+					if t.HasBookingPIN {
+						<label class="adm-checkbox" style="margin-top:0.35rem;">
+							<input type="checkbox" name="clear_booking_pin" value="1"/>
+							<span>Fjern eksisterende PIN-kode</span>
+						</label>
+					}
+				</div>
+				<div class="adm-field">
+					<label for="booking_default_subject">Standard møtetittel</label>
+					<input id="booking_default_subject" name="booking_default_subject" type="text" value={ t.BookingDefaultSubject } placeholder="Booked by MeetEasier"/>
+				</div>
+				<div class="adm-field full">
+					<label for="booking_organizer_email">Kiosk-/Arrangør e-post (valgfritt)</label>
+					<input id="booking_organizer_email" name="booking_organizer_email" type="email" value={ t.BookingOrganizerEmail } placeholder="moterom-kiosk@firma.no"/>
+					<span class="adm-hint">Tom = skriver direkte i rommets kalender. Satt = oppretter møtet fra denne kontoen med rommet som ressurs slik at Exchange-godkjenningsregler følges.</span>
+				</div>
+			</div>
+
 			<div class="adm-section-title">3. Layout, Logoer &amp; Bilder</div>
 			<div class="adm-form-grid">
 				<div class="adm-field">

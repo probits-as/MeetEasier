@@ -12,7 +12,14 @@ import (
 )
 
 func singleRoomPartialURL(alias, tenantSlug string, explicitTenant bool) string {
-	path := "/partials/single-room/" + url.PathEscape(alias)
+	return appendTenantQuery("/partials/single-room/"+url.PathEscape(alias), tenantSlug, explicitTenant)
+}
+
+func singleRoomBookURL(alias, tenantSlug string, explicitTenant bool) string {
+	return appendTenantQuery("/single-room/"+url.PathEscape(alias)+"/book", tenantSlug, explicitTenant)
+}
+
+func appendTenantQuery(path, tenantSlug string, explicitTenant bool) string {
 	if explicitTenant && tenantSlug != "" {
 		return path + "?tenant=" + url.QueryEscape(tenantSlug)
 	}
@@ -35,15 +42,15 @@ func nextUpLabel(tenant model.Tenant, busy bool) string {
 	return ""
 }
 
-templ SingleRoomPage(tenant model.Tenant, room model.Room, alias string, found bool, initialized bool, explicitTenant bool) {
+templ SingleRoomPage(tenant model.Tenant, room model.Room, alias string, found bool, initialized bool, explicitTenant bool, flashMsg string, errMsg string) {
 	@layout.Base(roomTitle(tenant, room, alias, found), tenant) {
 		<div
 			id="single-room__wrap"
 			hx-get={ singleRoomPartialURL(alias, tenant.Slug, explicitTenant) }
-			hx-trigger="every 30s"
+			hx-trigger="every 30s [!document.activeElement || !document.activeElement.closest('.sr-booking-panel')]"
 			hx-swap="innerHTML"
 		>
-			@SingleRoomContent(tenant, room, found, initialized)
+			@SingleRoomContent(tenant, room, found, initialized, explicitTenant, flashMsg, errMsg)
 		</div>
 	}
 }
@@ -55,7 +62,7 @@ func roomTitle(tenant model.Tenant, room model.Room, alias string, found bool) s
 	return alias + " - " + tenant.Name
 }
 
-templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initialized bool) {
+templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initialized bool, explicitTenant bool, flashMsg string, errMsg string) {
 	if !initialized && !found {
 		<p id="fb__spinner-wrap">
 			<img id="fb__spinner" alt="Loading..." src="/svgs/spinner.svg"/>
@@ -103,6 +110,9 @@ templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initia
 						{ room.Appointments[0].Organizer }
 					}
 				</div>
+				if tenant.BookingEnabled && room.ErrorMessage == "" {
+					@bookingPanel(tenant, room, explicitTenant, flashMsg, errMsg)
+				}
 			</div>
 			<div class="columns small-4 right-col">
 				<div id="single-room__clock-wrap">
@@ -140,5 +150,82 @@ templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initia
 			</div>
 		</div>
 	}
+}
+
+templ bookingPanel(tenant model.Tenant, room model.Room, explicitTenant bool, flashMsg string, errMsg string) {
+	<div class="sr-booking-panel">
+		if flashMsg != "" {
+			<div class="sr-booking-alert ok">{ flashMsg }</div>
+		}
+		if errMsg != "" {
+			<div class="sr-booking-alert err">{ errMsg }</div>
+		}
+		<form
+			method="post"
+			action={ templ.SafeURL(singleRoomBookURL(room.RoomAlias, tenant.Slug, explicitTenant)) }
+			hx-post={ singleRoomBookURL(room.RoomAlias, tenant.Slug, explicitTenant) }
+			hx-target="#single-room__wrap"
+			hx-swap="innerHTML"
+		>
+			if !room.Busy {
+				if durations := model.AvailableBookingDurations(room, false, time.Now()); len(durations) > 0 {
+					<div class="sr-booking-inputs">
+						<input class="sr-input" type="text" name="subject" placeholder="Valgfri møtetittel..." autocomplete="off"/>
+						if tenant.HasBookingPIN {
+							<input class="sr-input sr-input-pin" type="password" name="pin" inputmode="numeric" placeholder="PIN / passord" required autocomplete="off"/>
+						}
+					</div>
+					<div class="sr-booking-group">
+						<span class="sr-booking-label">Book rommet nå:</span>
+						<div class="sr-booking-buttons">
+							for _, mins := range durations {
+								<button type="submit" name="booking_choice" value={ fmt.Sprintf("%s:%d", model.BookingActionBookNow, mins) } class="sr-book-btn">
+									{ strconv.Itoa(mins) } min
+								</button>
+							}
+						</div>
+					</div>
+				} else {
+					<div class="sr-booking-note">Rommet er straks opptatt</div>
+				}
+			} else if len(room.Appointments) > 0 {
+				if afterDurations := model.AvailableBookingDurations(room, true, time.Now()); len(afterDurations) > 0 || tenant.HasBookingPIN {
+					<div class="sr-booking-inputs">
+						if len(afterDurations) > 0 {
+							<input class="sr-input" type="text" name="subject" placeholder="Valgfri tittel (bok etter)..." autocomplete="off"/>
+						}
+						if tenant.HasBookingPIN {
+							<input class="sr-input sr-input-pin" type="password" name="pin" inputmode="numeric" placeholder="PIN / passord" required autocomplete="off"/>
+						}
+					</div>
+				}
+				<div class="sr-booking-group">
+					<span class="sr-booking-label">Pågående møte:</span>
+					<div class="sr-booking-buttons">
+						<button type="submit" name="booking_choice" value={ fmt.Sprintf("%s:0", model.BookingActionEndNow) } class="sr-book-btn sr-book-btn-danger">
+							Avslutt nå
+						</button>
+						for _, mins := range model.AvailableBookingDurations(room, true, time.Now()) {
+							<button type="submit" name="booking_choice" value={ fmt.Sprintf("%s:%d", model.BookingActionExtend, mins) } class="sr-book-btn">
+								Forleng +{ strconv.Itoa(mins) } min
+							</button>
+						}
+					</div>
+				</div>
+				if afterDurations := model.AvailableBookingDurations(room, true, time.Now()); len(afterDurations) > 0 {
+					<div class="sr-booking-group">
+						<span class="sr-booking-label">Book etter møtet:</span>
+						<div class="sr-booking-buttons">
+							for _, mins := range afterDurations {
+								<button type="submit" name="booking_choice" value={ fmt.Sprintf("%s:%d", model.BookingActionBookAfter, mins) } class="sr-book-btn sr-book-btn-secondary">
+									{ strconv.Itoa(mins) } min
+								</button>
+							}
+						</div>
+					</div>
+				}
+			}
+		</form>
+	</div>
 }
 

@@ -88,6 +88,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/partials/flightboard", s.handleFlightboardPartial)
 	r.Get("/single-room/{alias}", s.handleSingleRoomPage)
 	r.Get("/partials/single-room/{alias}", s.handleSingleRoomPartial)
+	r.Post("/single-room/{alias}/book", s.handleSingleRoomBook)
 	r.Get("/tenant-assets/{slug}/{key}", s.handleTenantAsset)
 
 	// JSON API routes (backward-compatible + health check + authorized admin API)
@@ -95,6 +96,7 @@ func (s *Server) Router() http.Handler {
 		api.Get("/rooms", s.handleAPIRooms)
 		api.Get("/roomlists", s.handleAPIRoomlists)
 		api.Get("/heartbeat", s.handleAPIHeartbeat)
+		api.Post("/roombooking", s.handleAPIRoomBooking)
 
 		api.Route("/admin", func(admAPI chi.Router) {
 			admAPI.Use(s.requireAdminAPI)

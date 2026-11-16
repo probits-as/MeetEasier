@@ -112,6 +112,10 @@ CREATE TABLE IF NOT EXISTS tenants (
 	max_items INTEGER NOT NULL DEFAULT 6,
 	room_blacklist TEXT NOT NULL DEFAULT '',
 	privacy_mode TEXT NOT NULL DEFAULT 'normal',
+	booking_enabled INTEGER NOT NULL DEFAULT 0,
+	booking_pin TEXT NOT NULL DEFAULT '',
+	booking_organizer_email TEXT NOT NULL DEFAULT '',
+	booking_default_subject TEXT NOT NULL DEFAULT '',
 	theme_preset TEXT NOT NULL DEFAULT 'standard',
 	theme_json TEXT NOT NULL DEFAULT '{}',
 	custom_css TEXT NOT NULL DEFAULT '',
@@ -144,8 +148,57 @@ CREATE TABLE IF NOT EXISTS app_settings (
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
+	return s.ensureTenantColumns(ctx)
+}
+
+func (s *Store) ensureTenantColumns(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(tenants)`)
+	if err != nil {
+		return fmt.Errorf("inspect tenants columns: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notNull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan table_info: %w", err)
+		}
+		existing[strings.ToLower(name)] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	alterStmts := []struct {
+		col string
+		ddl string
+	}{
+		{"booking_enabled", `ALTER TABLE tenants ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0`},
+		{"booking_pin", `ALTER TABLE tenants ADD COLUMN booking_pin TEXT NOT NULL DEFAULT ''`},
+		{"booking_organizer_email", `ALTER TABLE tenants ADD COLUMN booking_organizer_email TEXT NOT NULL DEFAULT ''`},
+		{"booking_default_subject", `ALTER TABLE tenants ADD COLUMN booking_default_subject TEXT NOT NULL DEFAULT ''`},
+	}
+	for _, st := range alterStmts {
+		if _, ok := existing[st.col]; !ok {
+			if _, err := s.db.ExecContext(ctx, st.ddl); err != nil {
+				return fmt.Errorf("add column %s: %w", st.col, err)
+			}
+		}
+	}
 	return nil
 }
+
+const tenantSelectCols = `id, slug, name, domains, is_default, provider_type,
+	oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
+	max_days, max_room_lists, max_rooms, max_items, room_blacklist,
+	privacy_mode, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
+	theme_preset, theme_json, custom_css, poll_interval_seconds,
+	created_at, updated_at`
 
 func (s *Store) seed(ctx context.Context, cfg config.AppConfig) error {
 	var tenantCount int
@@ -248,15 +301,7 @@ func (s *Store) GetOrCreateSessionSecret(ctx context.Context, configured string)
 
 // ListTenants returns all configured tenants ordered by default first, then name.
 func (s *Store) ListTenants(ctx context.Context) ([]model.Tenant, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, slug, name, domains, is_default, provider_type,
-		       oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
-		       max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-		       privacy_mode, theme_preset, theme_json, custom_css, poll_interval_seconds,
-		       created_at, updated_at
-		FROM tenants
-		ORDER BY is_default DESC, id ASC
-	`)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+tenantSelectCols+` FROM tenants ORDER BY is_default DESC, id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
@@ -275,14 +320,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]model.Tenant, error) {
 
 // GetTenantByID fetches a tenant by numeric ID.
 func (s *Store) GetTenantByID(ctx context.Context, id int64) (model.Tenant, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, slug, name, domains, is_default, provider_type,
-		       oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
-		       max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-		       privacy_mode, theme_preset, theme_json, custom_css, poll_interval_seconds,
-		       created_at, updated_at
-		FROM tenants WHERE id = ?
-	`, id)
+	row := s.db.QueryRowContext(ctx, `SELECT `+tenantSelectCols+` FROM tenants WHERE id = ?`, id)
 	t, err := scanTenant(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Tenant{}, ErrNotFound
@@ -292,14 +330,7 @@ func (s *Store) GetTenantByID(ctx context.Context, id int64) (model.Tenant, erro
 
 // GetTenantBySlug fetches a tenant by slug.
 func (s *Store) GetTenantBySlug(ctx context.Context, slug string) (model.Tenant, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, slug, name, domains, is_default, provider_type,
-		       oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
-		       max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-		       privacy_mode, theme_preset, theme_json, custom_css, poll_interval_seconds,
-		       created_at, updated_at
-		FROM tenants WHERE LOWER(slug) = LOWER(?)
-	`, strings.TrimSpace(slug))
+	row := s.db.QueryRowContext(ctx, `SELECT `+tenantSelectCols+` FROM tenants WHERE LOWER(slug) = LOWER(?)`, strings.TrimSpace(slug))
 	t, err := scanTenant(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Tenant{}, ErrNotFound
@@ -309,16 +340,7 @@ func (s *Store) GetTenantBySlug(ctx context.Context, slug string) (model.Tenant,
 
 // GetDefaultTenant returns the tenant marked as default, or the first tenant.
 func (s *Store) GetDefaultTenant(ctx context.Context) (model.Tenant, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, slug, name, domains, is_default, provider_type,
-		       oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
-		       max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-		       privacy_mode, theme_preset, theme_json, custom_css, poll_interval_seconds,
-		       created_at, updated_at
-		FROM tenants
-		ORDER BY is_default DESC, id ASC
-		LIMIT 1
-	`)
+	row := s.db.QueryRowContext(ctx, `SELECT `+tenantSelectCols+` FROM tenants ORDER BY is_default DESC, id ASC LIMIT 1`)
 	t, err := scanTenant(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Tenant{}, ErrNotFound
@@ -419,20 +441,26 @@ func (s *Store) CreateTenant(ctx context.Context, t *model.Tenant) error {
 		}
 	}
 
+	if t.BookingPIN == model.BookingPINClearMarker {
+		t.BookingPIN = ""
+	}
+
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO tenants (
 			slug, name, domains, is_default, provider_type,
 			oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
 			max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-			privacy_mode, theme_preset, theme_json, custom_css, poll_interval_seconds,
+			privacy_mode, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
+			theme_preset, theme_json, custom_css, poll_interval_seconds,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
-		t.PrivacyMode, t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
+		t.PrivacyMode, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
+		t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
 		now, now,
 	)
 	if err != nil {
@@ -448,6 +476,7 @@ func (s *Store) CreateTenant(ctx context.Context, t *model.Tenant) error {
 	}
 	t.ID = id
 	t.HasClientSecret = t.OAuthClientSecret != ""
+	t.HasBookingPIN = t.BookingPIN != ""
 	t.CreatedAt = now
 	t.UpdatedAt = now
 
@@ -488,16 +517,24 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if keepSecretWhenEmpty && t.OAuthClientSecret == "" {
-		var existingSecret string
-		err := tx.QueryRowContext(ctx, `SELECT oauth_client_secret FROM tenants WHERE id = ?`, t.ID).Scan(&existingSecret)
+	if keepSecretWhenEmpty && (t.OAuthClientSecret == "" || t.BookingPIN == "") {
+		var existingSecret, existingPIN string
+		err := tx.QueryRowContext(ctx, `SELECT oauth_client_secret, booking_pin FROM tenants WHERE id = ?`, t.ID).Scan(&existingSecret, &existingPIN)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
 		if err != nil {
 			return err
 		}
-		t.OAuthClientSecret = existingSecret
+		if t.OAuthClientSecret == "" {
+			t.OAuthClientSecret = existingSecret
+		}
+		if t.BookingPIN == "" {
+			t.BookingPIN = existingPIN
+		}
+	}
+	if t.BookingPIN == model.BookingPINClearMarker {
+		t.BookingPIN = ""
 	}
 
 	if t.IsDefault {
@@ -512,14 +549,16 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 			slug = ?, name = ?, domains = ?, is_default = ?, provider_type = ?,
 			oauth_client_id = ?, oauth_authority = ?, oauth_client_secret = ?, exchange_domain = ?,
 			max_days = ?, max_room_lists = ?, max_rooms = ?, max_items = ?, room_blacklist = ?,
-			privacy_mode = ?, theme_preset = ?, theme_json = ?, custom_css = ?, poll_interval_seconds = ?,
+			privacy_mode = ?, booking_enabled = ?, booking_pin = ?, booking_organizer_email = ?, booking_default_subject = ?,
+			theme_preset = ?, theme_json = ?, custom_css = ?, poll_interval_seconds = ?,
 			updated_at = ?
 		WHERE id = ?
 	`,
 		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
-		t.PrivacyMode, t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
+		t.PrivacyMode, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
+		t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
 		now, t.ID,
 	)
 	if err != nil {
@@ -533,6 +572,7 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 		return ErrNotFound
 	}
 	t.HasClientSecret = t.OAuthClientSecret != ""
+	t.HasBookingPIN = t.BookingPIN != ""
 	t.UpdatedAt = now
 
 	return tx.Commit()
@@ -689,20 +729,23 @@ type rowScanner interface {
 
 func scanTenant(r rowScanner) (model.Tenant, error) {
 	var t model.Tenant
-	var isDefaultInt int
+	var isDefaultInt, bookingEnabledInt int
 	var themeJSON string
 	err := r.Scan(
 		&t.ID, &t.Slug, &t.Name, &t.Domains, &isDefaultInt, &t.ProviderType,
 		&t.OAuthClientID, &t.OAuthAuthority, &t.OAuthClientSecret, &t.ExchangeDomain,
 		&t.MaxDays, &t.MaxRoomLists, &t.MaxRooms, &t.MaxItems, &t.RoomBlacklist,
-		&t.PrivacyMode, &t.ThemePreset, &themeJSON, &t.CustomCSS, &t.PollIntervalSeconds,
+		&t.PrivacyMode, &bookingEnabledInt, &t.BookingPIN, &t.BookingOrganizerEmail, &t.BookingDefaultSubject,
+		&t.ThemePreset, &themeJSON, &t.CustomCSS, &t.PollIntervalSeconds,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return model.Tenant{}, err
 	}
 	t.IsDefault = isDefaultInt == 1
+	t.BookingEnabled = bookingEnabledInt == 1
 	t.HasClientSecret = t.OAuthClientSecret != ""
+	t.HasBookingPIN = t.BookingPIN != ""
 
 	t.Theme = model.ThemeForPreset(t.ThemePreset)
 	if strings.TrimSpace(themeJSON) != "" && themeJSON != "{}" {

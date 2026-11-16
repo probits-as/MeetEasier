@@ -1,6 +1,7 @@
 package calendar
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -60,6 +61,7 @@ type graphPlacesResponse struct {
 }
 
 type graphEvent struct {
+	ID          string `json:"id"`
 	Subject     string `json:"subject"`
 	Sensitivity string `json:"sensitivity"`
 	Organizer   struct {
@@ -167,6 +169,7 @@ func (p *MSGraphProvider) FetchRooms(ctx context.Context, tenant model.Tenant) (
 				organizer := ev.Organizer.EmailAddress.Name
 				subject, isPrivate := applyPrivacy(tenant.PrivacyMode, ev.Subject, ev.Sensitivity, organizer)
 				appts = append(appts, model.Appointment{
+					ID:        ev.ID,
 					Subject:   subject,
 					Organizer: organizer,
 					Start:     startMs,
@@ -255,11 +258,96 @@ func (p *MSGraphProvider) getRoomsInList(ctx context.Context, token, listEmail s
 	return out.Value, nil
 }
 
+// ExecuteBooking creates, extends, or terminates a calendar event in Microsoft Graph.
+func (p *MSGraphProvider) ExecuteBooking(ctx context.Context, tenant model.Tenant, room model.Room, req model.BookingRequest) error {
+	if strings.TrimSpace(tenant.OAuthClientID) == "" ||
+		strings.TrimSpace(tenant.OAuthAuthority) == "" ||
+		strings.TrimSpace(tenant.OAuthClientSecret) == "" {
+		return errors.New("Microsoft Graph OAuth credentials are not configured")
+	}
+
+	start, end, targetAppt, err := ComputeBookingWindow(room, req, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+
+	token, err := p.acquireToken(ctx, tenant)
+	if err != nil {
+		return fmt.Errorf("acquire oauth token: %w", err)
+	}
+
+	subject := strings.TrimSpace(req.Subject)
+	if subject == "" {
+		subject = strings.TrimSpace(tenant.BookingDefaultSubject)
+	}
+	if subject == "" {
+		subject = "Booked by MeetEasier"
+	}
+
+	const graphTimeLayout = "2006-01-02T15:04:05"
+
+	switch req.Action {
+	case model.BookingActionBookNow, model.BookingActionBookAfter:
+		calendarOwner := strings.TrimSpace(tenant.BookingOrganizerEmail)
+		payload := map[string]any{
+			"subject": subject,
+			"body": map[string]string{
+				"contentType": "Text",
+				"content":     "Booked via MeetEasier room panel",
+			},
+			"start": map[string]string{
+				"dateTime": start.UTC().Format(graphTimeLayout),
+				"timeZone": "UTC",
+			},
+			"end": map[string]string{
+				"dateTime": end.UTC().Format(graphTimeLayout),
+				"timeZone": "UTC",
+			},
+			"location": map[string]string{
+				"displayName": room.Name,
+			},
+		}
+		if calendarOwner != "" {
+			payload["attendees"] = []map[string]any{
+				{
+					"type": "resource",
+					"emailAddress": map[string]string{
+						"address": room.Email,
+						"name":    room.Name,
+					},
+				},
+			}
+		} else {
+			calendarOwner = room.Email
+		}
+
+		endpoint := fmt.Sprintf("%s/users/%s/calendar/events", p.graphBaseURL, url.PathEscape(calendarOwner))
+		return p.doJSON(ctx, http.MethodPost, token, endpoint, payload, nil)
+
+	case model.BookingActionExtend, model.BookingActionEndNow:
+		if strings.TrimSpace(targetAppt.ID) == "" {
+			return errors.New("mangler møte-ID for oppdatering")
+		}
+		payload := map[string]any{
+			"end": map[string]string{
+				"dateTime": end.UTC().Format(graphTimeLayout),
+				"timeZone": "UTC",
+			},
+		}
+		endpoint := fmt.Sprintf("%s/users/%s/calendar/events/%s",
+			p.graphBaseURL, url.PathEscape(room.Email), url.PathEscape(targetAppt.ID))
+		return p.doJSON(ctx, http.MethodPatch, token, endpoint, payload, nil)
+
+	default:
+		return fmt.Errorf("ukjent booking-handling: %q", req.Action)
+	}
+}
+
 func (p *MSGraphProvider) getCalendarView(ctx context.Context, token, roomEmail, startISO, endISO string, top int) ([]graphEvent, error) {
 	q := url.Values{}
 	q.Set("startDateTime", startISO)
 	q.Set("endDateTime", endISO)
-	q.Set("$select", "organizer,subject,start,end,sensitivity")
+	q.Set("$select", "id,organizer,subject,start,end,sensitivity")
 	q.Set("$orderby", "start/dateTime")
 	q.Set("$top", strconv.Itoa(top))
 
@@ -274,12 +362,28 @@ func (p *MSGraphProvider) getCalendarView(ctx context.Context, token, roomEmail,
 }
 
 func (p *MSGraphProvider) getJSON(ctx context.Context, token, targetURL string, dst any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	return p.doJSON(ctx, http.MethodGet, token, targetURL, nil, dst)
+}
+
+func (p *MSGraphProvider) doJSON(ctx context.Context, method, token, targetURL string, payload any, dst any) error {
+	var bodyReader io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		bodyReader = bytes.NewReader(encoded)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, bodyReader)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -296,7 +400,10 @@ func (p *MSGraphProvider) getJSON(ctx context.Context, token, targetURL string, 
 		return fmt.Errorf("graph api %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	return json.Unmarshal(body, dst)
+	if dst != nil && len(body) > 0 {
+		return json.Unmarshal(body, dst)
+	}
+	return nil
 }
 
 func parseGraphDateTime(raw, tz string) (int64, error) {

@@ -20,6 +20,12 @@ const (
 
 	RowLayoutStandard = "standard"
 	RowLayoutCompact  = "compact"
+
+	BookingActionBookNow   = "book_now"
+	BookingActionExtend    = "extend"
+	BookingActionEndNow    = "end_now"
+	BookingActionBookAfter = "book_after"
+	BookingPINClearMarker  = "__CLEAR__"
 )
 
 // ThemeLabels holds all configurable UI strings for a tenant.
@@ -154,9 +160,12 @@ type ThemeBundle struct {
 	MaxRooms            int                       `json:"max_rooms,omitempty"`
 	MaxItems            int                       `json:"max_items,omitempty"`
 	RoomBlacklist       string                    `json:"room_blacklist,omitempty"`
-	PollIntervalSeconds int                       `json:"poll_interval_seconds,omitempty"`
-	PrivacyMode         string                    `json:"privacy_mode,omitempty"`
-	ThemePreset         string                    `json:"theme_preset,omitempty"`
+	PollIntervalSeconds   int                       `json:"poll_interval_seconds,omitempty"`
+	PrivacyMode           string                    `json:"privacy_mode,omitempty"`
+	BookingEnabled        *bool                     `json:"booking_enabled,omitempty"`
+	BookingOrganizerEmail string                    `json:"booking_organizer_email,omitempty"`
+	BookingDefaultSubject string                    `json:"booking_default_subject,omitempty"`
+	ThemePreset           string                    `json:"theme_preset,omitempty"`
 	Theme               ThemeConfig               `json:"theme"`
 	CustomCSS           string                    `json:"custom_css,omitempty"`
 	Assets              map[string]ThemeAssetData `json:"assets,omitempty"`
@@ -180,8 +189,13 @@ type Tenant struct {
 	MaxRooms            int         `json:"max_rooms"`
 	MaxItems            int         `json:"max_items"`
 	RoomBlacklist       string      `json:"room_blacklist"`
-	PrivacyMode         string      `json:"privacy_mode"`
-	ThemePreset         string      `json:"theme_preset"`
+	PrivacyMode           string      `json:"privacy_mode"`
+	BookingEnabled        bool        `json:"booking_enabled"`
+	BookingPIN            string      `json:"-"`
+	HasBookingPIN         bool        `json:"has_booking_pin"`
+	BookingOrganizerEmail string      `json:"booking_organizer_email"`
+	BookingDefaultSubject string      `json:"booking_default_subject"`
+	ThemePreset           string      `json:"theme_preset"`
 	Theme               ThemeConfig `json:"theme"`
 	CustomCSS           string      `json:"custom_css"`
 	PollIntervalSeconds int         `json:"poll_interval_seconds"`
@@ -226,11 +240,21 @@ func (t Tenant) MarshalTheme() (string, error) {
 
 // Appointment mirrors the calendar event contract used by MeetEasier UI and API.
 type Appointment struct {
+	ID        string `json:"ID,omitempty"`
 	Subject   string `json:"Subject"`
 	Organizer string `json:"Organizer"`
 	Start     int64  `json:"Start"`
 	End       int64  `json:"End"`
 	Private   bool   `json:"Private"`
+}
+
+// BookingRequest represents a room booking, extension, or early termination command from a room display or API.
+type BookingRequest struct {
+	RoomAlias       string `json:"room_alias"`
+	Action          string `json:"action"`
+	DurationMinutes int    `json:"duration_minutes"`
+	Subject         string `json:"subject,omitempty"`
+	PIN             string `json:"pin,omitempty"`
 }
 
 // Room mirrors the room object returned by /api/rooms and rendered by templates.
@@ -253,6 +277,60 @@ func (r Room) RoomlistSlug() string {
 func Slugify(input string) string {
 	fields := strings.Fields(strings.ToLower(strings.TrimSpace(input)))
 	return strings.Join(fields, "-")
+}
+
+// AvailableBookingDurations returns candidate quick-booking durations (in minutes)
+// that fit cleanly before the next scheduled meeting.
+func AvailableBookingDurations(room Room, afterCurrent bool, now time.Time) []int {
+	nowMs := now.UnixMilli()
+	var presets []int
+	var gapMinutes int
+	hasGapLimit := false
+
+	if !afterCurrent {
+		if room.Busy {
+			return nil
+		}
+		presets = []int{15, 30, 45, 60, 90, 120}
+		for _, a := range room.Appointments {
+			if a.Start > nowMs {
+				gapMinutes = int(time.UnixMilli(a.Start).Sub(now).Minutes())
+				hasGapLimit = true
+				break
+			}
+		}
+	} else {
+		if !room.Busy || len(room.Appointments) == 0 {
+			return nil
+		}
+		presets = []int{15, 30, 60}
+		currEnd := room.Appointments[0].End
+		if len(room.Appointments) > 1 && room.Appointments[1].Start >= currEnd {
+			gapMinutes = int(time.UnixMilli(room.Appointments[1].Start).Sub(time.UnixMilli(currEnd)).Minutes())
+			hasGapLimit = true
+		}
+	}
+
+	if !hasGapLimit {
+		if !afterCurrent {
+			return []int{15, 30, 60, 120}
+		}
+		return presets
+	}
+
+	var out []int
+	for _, p := range presets {
+		if p <= gapMinutes {
+			out = append(out, p)
+			if len(out) == 4 {
+				break
+			}
+		}
+	}
+	if len(out) == 0 && gapMinutes >= 5 {
+		out = append(out, gapMinutes)
+	}
+	return out
 }
 
 // TenantStatus summarizes cached calendar sync status for a tenant.

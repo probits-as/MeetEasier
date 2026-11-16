@@ -3,8 +3,10 @@ package calendar
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -173,6 +175,117 @@ func TestManagerStaleWhileRevalidateOnGraphOutage(t *testing.T) {
 	}
 	if len(st2.Rooms) != 1 || st2.Rooms[0].Name != "Fjord" {
 		t.Fatalf("expected cached room to be preserved during outage, got %+v", st2.Rooms)
+	}
+}
+
+func TestMSGraphProviderExecuteBooking(t *testing.T) {
+	var createdPath string
+	var createdPayload map[string]any
+	var patchedPath string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		switch {
+		case r.URL.Path == "/oauth2/v2.0/token":
+			_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "fake-token"})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/calendar/events"):
+			createdPath = r.URL.Path
+			_ = json.Unmarshal(body, &createdPayload)
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "new-evt-1"})
+		case r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "/calendar/events/"):
+			patchedPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "evt-1"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	p := NewMSGraphProviderWithClient(srv.Client(), srv.URL+"/v1.0")
+	tenant := model.Tenant{
+		Slug:                  "prod",
+		ProviderType:          model.ProviderMSGraph,
+		OAuthClientID:         "cid",
+		OAuthAuthority:        srv.URL,
+		OAuthClientSecret:     "sec",
+		BookingEnabled:        true,
+		BookingOrganizerEmail: "kiosk@example.com",
+		BookingDefaultSubject: "Hurtigmøte",
+	}
+
+	room := model.Room{
+		Name:      "Fjord",
+		RoomAlias: "fjord",
+		Email:     "fjord@example.com",
+	}
+
+	// 1. book_now via BookingOrganizerEmail invites room as resource attendee
+	err := p.ExecuteBooking(context.Background(), tenant, room, model.BookingRequest{
+		RoomAlias:       "fjord",
+		Action:          model.BookingActionBookNow,
+		DurationMinutes: 30,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteBooking book_now failed: %v", err)
+	}
+	if createdPath != "/v1.0/users/kiosk@example.com/calendar/events" {
+		t.Fatalf("expected POST to organizer calendar, got %s", createdPath)
+	}
+	if createdPayload["subject"] != "Hurtigmøte" {
+		t.Fatalf("expected default subject Hurtigmøte, got %v", createdPayload["subject"])
+	}
+
+	// 2. extend active meeting patches room calendar event by ID
+	nowMs := time.Now().UnixMilli()
+	busyRoom := model.Room{
+		Name:      "Fjord",
+		RoomAlias: "fjord",
+		Email:     "fjord@example.com",
+		Busy:      true,
+		Appointments: []model.Appointment{
+			{
+				ID:    "evt-active-1",
+				Start: nowMs - 600_000,
+				End:   nowMs + 600_000,
+			},
+			{
+				ID:    "evt-next-2",
+				Start: nowMs + 1_800_000, // 30m from now, only 20m gap after curr
+				End:   nowMs + 3_600_000,
+			},
+		},
+	}
+
+	// Extending by 30m would collide with evt-next-2 -> must fail
+	if err := p.ExecuteBooking(context.Background(), tenant, busyRoom, model.BookingRequest{
+		Action:          model.BookingActionExtend,
+		DurationMinutes: 30,
+	}); err == nil {
+		t.Fatalf("expected overlap error when extending past next meeting")
+	}
+
+	// Extending by 15m fits before evt-next-2 -> succeeds via PATCH
+	if err := p.ExecuteBooking(context.Background(), tenant, busyRoom, model.BookingRequest{
+		Action:          model.BookingActionExtend,
+		DurationMinutes: 15,
+	}); err != nil {
+		t.Fatalf("ExecuteBooking extend 15m failed: %v", err)
+	}
+	if patchedPath != "/v1.0/users/fjord@example.com/calendar/events/evt-active-1" {
+		t.Fatalf("expected PATCH to active room event, got %s", patchedPath)
+	}
+
+	// 3. end_now patches event end time to now
+	patchedPath = ""
+	if err := p.ExecuteBooking(context.Background(), tenant, busyRoom, model.BookingRequest{
+		Action: model.BookingActionEndNow,
+	}); err != nil {
+		t.Fatalf("ExecuteBooking end_now failed: %v", err)
+	}
+	if patchedPath != "/v1.0/users/fjord@example.com/calendar/events/evt-active-1" {
+		t.Fatalf("expected PATCH on end_now, got %s", patchedPath)
 	}
 }
 

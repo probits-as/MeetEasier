@@ -2,6 +2,8 @@ package calendar
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -11,9 +13,10 @@ import (
 	"github.com/probits-as/meeteasier/internal/model"
 )
 
-// Provider fetches rooms and roomlists for a given tenant.
+// Provider fetches rooms and roomlists for a given tenant and executes bookings.
 type Provider interface {
 	FetchRooms(ctx context.Context, tenant model.Tenant) ([]model.Room, error)
+	ExecuteBooking(ctx context.Context, tenant model.Tenant, room model.Room, req model.BookingRequest) error
 }
 
 // TenantStore defines the store methods needed by the calendar manager.
@@ -196,6 +199,105 @@ func (m *Manager) GetRoomByAlias(tenant model.Tenant, alias string) (model.Room,
 		}
 	}
 	return model.Room{}, false
+}
+
+// BookRoom executes a booking/extension/end action against the tenant's calendar provider and immediately refreshes cached state.
+func (m *Manager) BookRoom(ctx context.Context, tenant model.Tenant, alias string, req model.BookingRequest) (model.Room, error) {
+	room, found := m.GetRoomByAlias(tenant, alias)
+	if !found {
+		return model.Room{}, fmt.Errorf("fant ikke rommet %q", alias)
+	}
+	if room.ErrorMessage != "" {
+		return room, fmt.Errorf("kan ikke booke rom med kalenderfeil: %s", room.ErrorMessage)
+	}
+
+	provider := m.providerFor(tenant)
+	execCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	if err := provider.ExecuteBooking(execCtx, tenant, room, req); err != nil {
+		return room, err
+	}
+
+	status := m.SyncTenantNow(execCtx, tenant)
+	if status.LastError != "" && len(status.Rooms) == 0 {
+		return room, errors.New(status.LastError)
+	}
+	target := strings.ToLower(strings.TrimSpace(alias))
+	for _, r := range status.Rooms {
+		if strings.ToLower(r.RoomAlias) == target {
+			return r, nil
+		}
+	}
+	return room, nil
+}
+
+// ComputeBookingWindow validates and calculates the UTC start/end timestamps and optional target event for a booking request.
+func ComputeBookingWindow(room model.Room, req model.BookingRequest, now time.Time) (start time.Time, end time.Time, targetAppt model.Appointment, err error) {
+	nowUTC := now.UTC()
+	nowMs := nowUTC.UnixMilli()
+
+	switch req.Action {
+	case model.BookingActionBookNow:
+		if room.Busy {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("rommet er allerede opptatt")
+		}
+		if req.DurationMinutes < 5 || req.DurationMinutes > 480 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ugyldig møtelengde")
+		}
+		start = nowUTC
+		end = nowUTC.Add(time.Duration(req.DurationMinutes) * time.Minute)
+		for _, a := range room.Appointments {
+			if a.Start > nowMs {
+				if end.UnixMilli() > a.Start {
+					return time.Time{}, time.Time{}, model.Appointment{}, errors.New("valgt varighet overlapper med neste møte")
+				}
+				break
+			}
+		}
+		return start, end, model.Appointment{}, nil
+
+	case model.BookingActionBookAfter:
+		if !room.Busy || len(room.Appointments) == 0 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ingen pågående møte å booke etter")
+		}
+		if req.DurationMinutes < 5 || req.DurationMinutes > 480 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ugyldig møtelengde")
+		}
+		curr := room.Appointments[0]
+		start = time.UnixMilli(curr.End).UTC()
+		end = start.Add(time.Duration(req.DurationMinutes) * time.Minute)
+		if len(room.Appointments) > 1 && end.UnixMilli() > room.Appointments[1].Start {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("valgt varighet overlapper med neste møte")
+		}
+		return start, end, model.Appointment{}, nil
+
+	case model.BookingActionExtend:
+		if !room.Busy || len(room.Appointments) == 0 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ingen pågående møte å forlenge")
+		}
+		if req.DurationMinutes < 5 || req.DurationMinutes > 240 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ugyldig forlengelse")
+		}
+		curr := room.Appointments[0]
+		start = time.UnixMilli(curr.Start).UTC()
+		end = time.UnixMilli(curr.End).UTC().Add(time.Duration(req.DurationMinutes) * time.Minute)
+		if len(room.Appointments) > 1 && end.UnixMilli() > room.Appointments[1].Start {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("forlengelsen overlapper med neste møte")
+		}
+		return start, end, curr, nil
+
+	case model.BookingActionEndNow:
+		if !room.Busy || len(room.Appointments) == 0 {
+			return time.Time{}, time.Time{}, model.Appointment{}, errors.New("ingen pågående møte å avslutte")
+		}
+		curr := room.Appointments[0]
+		start = time.UnixMilli(curr.Start).UTC()
+		return start, nowUTC, curr, nil
+
+	default:
+		return time.Time{}, time.Time{}, model.Appointment{}, fmt.Errorf("ukjent booking-handling: %q", req.Action)
+	}
 }
 
 func (m *Manager) syncDue(ctx context.Context, forceAll bool) {

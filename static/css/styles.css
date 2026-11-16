@@ -661,6 +661,119 @@ a {
   max-height: 60px;
 }
 
+/* Single Room Touch Booking Panel */
+#single-room__wrap .full-height .left-col {
+  overflow-y: auto;
+}
+
+.sr-booking-panel {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.sr-booking-alert {
+  padding: 0.65rem 1rem;
+  border-radius: 6px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.9rem;
+}
+
+.sr-booking-alert.ok {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+}
+
+.sr-booking-alert.err {
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid #ffd166;
+  color: #ffe8a3;
+}
+
+.sr-booking-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.sr-input {
+  flex: 1 1 200px;
+  min-height: 44px;
+  padding: 0.55rem 0.85rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+}
+
+.sr-input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sr-input-pin {
+  flex: 0 1 170px;
+}
+
+.sr-booking-group {
+  margin-bottom: 0.85rem;
+}
+
+.sr-booking-label {
+  display: block;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.92;
+  margin-bottom: 0.45rem;
+}
+
+.sr-booking-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.sr-book-btn {
+  min-height: 48px;
+  padding: 0.6rem 1.15rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.32);
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.08s ease;
+}
+
+.sr-book-btn:hover {
+  background: rgba(0, 0, 0, 0.52);
+}
+
+.sr-book-btn:active {
+  transform: scale(0.98);
+}
+
+.sr-book-btn-danger {
+  background: rgba(0, 0, 0, 0.48);
+  border-color: #ffffff;
+}
+
+.sr-book-btn-secondary {
+  border-style: dashed;
+}
+
+.sr-booking-note {
+  font-size: 1.05rem;
+  opacity: 0.9;
+}
+
 #single-room__wrap #error-wrap {
   width: 600px;
   margin: 0 auto;

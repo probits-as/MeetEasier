@@ -61,15 +61,21 @@ func (s *Store) BuildThemeBundle(ctx context.Context, t model.Tenant) (model.The
 		MaxRooms:            t.MaxRooms,
 		MaxItems:            t.MaxItems,
 		RoomBlacklist:       t.RoomBlacklist,
-		PollIntervalSeconds: t.PollIntervalSeconds,
-		PrivacyMode:         t.PrivacyMode,
-		ThemePreset:         t.ThemePreset,
-		Theme:               t.Theme,
-		CustomCSS:           t.CustomCSS,
+		PollIntervalSeconds:   t.PollIntervalSeconds,
+		PrivacyMode:           t.PrivacyMode,
+		BookingOrganizerEmail: t.BookingOrganizerEmail,
+		BookingDefaultSubject: t.BookingDefaultSubject,
+		ThemePreset:           t.ThemePreset,
+		Theme:                 t.Theme,
+		CustomCSS:             t.CustomCSS,
 	}
 	if t.IsDefault {
 		isDef := true
 		bundle.IsDefault = &isDef
+	}
+	if t.BookingEnabled {
+		be := true
+		bundle.BookingEnabled = &be
 	}
 	if len(assets) > 0 {
 		bundle.Assets = make(map[string]model.ThemeAssetData, len(assets))
@@ -283,6 +289,15 @@ func (s *Store) UpsertTenantFromBundle(ctx context.Context, cfg config.AppConfig
 	}
 	if bundle.PollIntervalSeconds >= 10 {
 		t.PollIntervalSeconds = bundle.PollIntervalSeconds
+	}
+	if bundle.BookingEnabled != nil {
+		t.BookingEnabled = *bundle.BookingEnabled
+	}
+	if v := strings.TrimSpace(bundle.BookingOrganizerEmail); v != "" {
+		t.BookingOrganizerEmail = v
+	}
+	if v := strings.TrimSpace(bundle.BookingDefaultSubject); v != "" {
+		t.BookingDefaultSubject = v
 	}
 
 	// Ensure at least one default tenant exists if database starts from a bootstrap bundle without is_default

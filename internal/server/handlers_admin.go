@@ -269,6 +269,14 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 	if t.PrivacyMode == "" {
 		t.PrivacyMode = model.PrivacyNormal
 	}
+	t.BookingEnabled = r.FormValue("booking_enabled") == "1"
+	if r.FormValue("clear_booking_pin") == "1" {
+		t.BookingPIN = model.BookingPINClearMarker
+	} else {
+		t.BookingPIN = strings.TrimSpace(r.FormValue("booking_pin"))
+	}
+	t.BookingOrganizerEmail = strings.TrimSpace(r.FormValue("booking_organizer_email"))
+	t.BookingDefaultSubject = strings.TrimSpace(r.FormValue("booking_default_subject"))
 	t.OAuthClientID = strings.TrimSpace(r.FormValue("oauth_client_id"))
 	t.OAuthAuthority = strings.TrimSpace(r.FormValue("oauth_authority"))
 	t.OAuthClientSecret = strings.TrimSpace(r.FormValue("oauth_client_secret"))
