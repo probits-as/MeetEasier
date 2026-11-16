@@ -14,6 +14,7 @@ import (
 
 	"github.com/probits-as/meeteasier/internal/calendar"
 	"github.com/probits-as/meeteasier/internal/config"
+	"github.com/probits-as/meeteasier/internal/i18n"
 	"github.com/probits-as/meeteasier/internal/model"
 	"github.com/probits-as/meeteasier/internal/store"
 )
@@ -120,6 +121,7 @@ func (s *Server) Router() http.Handler {
 	r.Route("/admin", func(adm chi.Router) {
 		adm.Use(s.requireAdmin)
 		adm.Get("/", s.handleAdminDashboard)
+		adm.Post("/language", s.handleAdminLanguageUpdate)
 		adm.Post("/password", s.handleAdminPasswordUpdate)
 		adm.Post("/tenants", s.handleAdminTenantCreate)
 		adm.Post("/tenants/import", s.handleAdminTenantImportCreate)
@@ -174,6 +176,27 @@ func (s *Server) resolveTenant(r *http.Request) (model.Tenant, bool, error) {
 
 	t, err := s.store.ResolveTenantByHost(r.Context(), host)
 	return t, false, err
+}
+
+func (s *Server) activeLanguage(r *http.Request) string {
+	return s.store.GetAppLanguage(r.Context(), s.getDefaultConfig().Language)
+}
+
+func (s *Server) loginLanguage(r *http.Request) string {
+	if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+		return i18n.Normalize(q)
+	}
+	if c, err := r.Cookie("meeteasier_lang"); err == nil && strings.TrimSpace(c.Value) != "" {
+		return i18n.Normalize(c.Value)
+	}
+	return s.activeLanguage(r)
+}
+
+func (s *Server) tenantLanguage(r *http.Request, t model.Tenant) string {
+	if lang := i18n.NormalizeTenantLanguage(t.Language); lang != "" {
+		return lang
+	}
+	return s.activeLanguage(r)
 }
 
 func slogMiddleware(next http.Handler) http.Handler {

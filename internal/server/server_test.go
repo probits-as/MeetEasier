@@ -74,6 +74,7 @@ func TestMultiTenantFlightboardAndSingleRoom(t *testing.T) {
 		Domains:             "nord.localhost,rooms.nord.example",
 		ProviderType:        model.ProviderMock,
 		PrivacyMode:         model.PrivacyOrganizerAsSubject,
+		Language:            "nb",
 		ThemePreset:         model.PresetCompact,
 		Theme:               model.DefaultCompactTheme(),
 		PollIntervalSeconds: 60,
@@ -512,7 +513,7 @@ func TestSingleRoomTouchBookingWithPINAndMockProvider(t *testing.T) {
 	reqPage := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
 	recPage := httptest.NewRecorder()
 	handler.ServeHTTP(recPage, reqPage)
-	if recPage.Code != http.StatusOK || !strings.Contains(recPage.Body.String(), "Book rommet nå") || !strings.Contains(recPage.Body.String(), `name="pin"`) {
+	if recPage.Code != http.StatusOK || !strings.Contains(recPage.Body.String(), "Book this room now") || !strings.Contains(recPage.Body.String(), `name="pin"`) {
 		t.Fatalf("expected booking panel and PIN input on single room page")
 	}
 
@@ -523,8 +524,8 @@ func TestSingleRoomTouchBookingWithPINAndMockProvider(t *testing.T) {
 	reqBad.Header.Set("HX-Request", "true")
 	recBad := httptest.NewRecorder()
 	handler.ServeHTTP(recBad, reqBad)
-	if !strings.Contains(recBad.Body.String(), "Feil PIN-kode") {
-		t.Fatalf("expected Feil PIN-kode error in HTMX response")
+	if !strings.Contains(recBad.Body.String(), "Invalid PIN / password") {
+		t.Fatalf("expected Invalid PIN / password error in HTMX response, got: %s", recBad.Body.String())
 	}
 
 	// 4. Correct PIN books Midnattssol for 30 minutes
@@ -535,8 +536,8 @@ func TestSingleRoomTouchBookingWithPINAndMockProvider(t *testing.T) {
 	recBook := httptest.NewRecorder()
 	handler.ServeHTTP(recBook, reqBook)
 	bodyBook := recBook.Body.String()
-	if !strings.Contains(bodyBook, "Rommet er booket i 30 minutter") || !strings.Contains(bodyBook, "Rask Synk") || !strings.Contains(bodyBook, "Avslutt nå") {
-		t.Fatalf("expected booked status and End Now button, got: %s", bodyBook)
+	if !strings.Contains(bodyBook, "Room booked for 30 minutes") || !strings.Contains(bodyBook, "Rask Synk") || !strings.Contains(bodyBook, "End now") {
+		t.Fatalf("expected booked status and End now button, got: %s", bodyBook)
 	}
 
 	// 5. Extend active booking by 15 min via JSON API
@@ -561,8 +562,233 @@ func TestSingleRoomTouchBookingWithPINAndMockProvider(t *testing.T) {
 	reqAfter := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
 	recAfter := httptest.NewRecorder()
 	handler.ServeHTTP(recAfter, reqAfter)
-	if !strings.Contains(recAfter.Body.String(), "Book rommet nå") {
+	if !strings.Contains(recAfter.Body.String(), "Book this room now") {
 		t.Fatalf("expected Midnattssol to be available again after end_now")
+	}
+}
+
+func TestLanguageSelectorAndI18n(t *testing.T) {
+	srv, st, handler := setupTestServer(t)
+
+	// 1. Unauthenticated /admin/login defaults to English
+	reqLoginPage := httptest.NewRequest(http.MethodGet, "/admin/login", nil)
+	recLoginPage := httptest.NewRecorder()
+	handler.ServeHTTP(recLoginPage, reqLoginPage)
+	loginBody := recLoginPage.Body.String()
+	if recLoginPage.Code != http.StatusOK || !strings.Contains(loginBody, `<html lang="en">`) || !strings.Contains(loginBody, "Sign in") {
+		t.Fatalf("expected default English login page, got status=%d body=%s", recLoginPage.Code, loginBody)
+	}
+
+	// 2. ?lang=nb switches login page to Norwegian without mutating SQLite
+	reqLoginNB := httptest.NewRequest(http.MethodGet, "/admin/login?lang=nb", nil)
+	recLoginNB := httptest.NewRecorder()
+	handler.ServeHTTP(recLoginNB, reqLoginNB)
+	loginNBBody := recLoginNB.Body.String()
+	if recLoginNB.Code != http.StatusOK || !strings.Contains(loginNBBody, `<html lang="nb">`) || !strings.Contains(loginNBBody, "Logg inn") {
+		t.Fatalf("expected Norwegian login page via ?lang=nb, got status=%d", recLoginNB.Code)
+	}
+
+	// Sign in to /admin
+	loginForm := url.Values{"username": {"admin"}, "password": {"secret123"}}
+	reqAuth := httptest.NewRequest(http.MethodPost, "/admin/login", strings.NewReader(loginForm.Encode()))
+	reqAuth.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	recAuth := httptest.NewRecorder()
+	handler.ServeHTTP(recAuth, reqAuth)
+	if recAuth.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on login, got %d", recAuth.Code)
+	}
+	var sessionCookie *http.Cookie
+	for _, c := range recAuth.Result().Cookies() {
+		if c.Name == "meeteasier_admin" {
+			sessionCookie = c
+			break
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatalf("expected admin session cookie")
+	}
+
+	// 3. Authenticated /admin defaults to English and Section 5 shows English placeholders with empty values
+	reqDashEN := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	reqDashEN.AddCookie(sessionCookie)
+	recDashEN := httptest.NewRecorder()
+	handler.ServeHTTP(recDashEN, reqDashEN)
+	dashENBody := recDashEN.Body.String()
+	if recDashEN.Code != http.StatusOK ||
+		!strings.Contains(dashENBody, `<html lang="en">`) ||
+		!strings.Contains(dashENBody, "Create new tenant") ||
+		!strings.Contains(dashENBody, `name="label_navbar_title" value="" placeholder="Conference Room Availability"`) {
+		t.Fatalf("expected English admin dashboard with empty custom label value and English placeholder, got status=%d", recDashEN.Code)
+	}
+
+	// Enable booking on default tenant and create a compact tenant with Language="" (System default)
+	ctx := context.Background()
+	tDef, err := st.GetTenantBySlug(ctx, "default")
+	if err != nil {
+		t.Fatalf("GetTenantBySlug: %v", err)
+	}
+	tDef.BookingEnabled = true
+	if err := st.UpdateTenant(ctx, &tDef, true); err != nil {
+		t.Fatalf("UpdateTenant: %v", err)
+	}
+	compactTenant := model.Tenant{
+		Slug:                "nord-compact",
+		Name:                "Nord Compact",
+		ProviderType:        model.ProviderMock,
+		MaxDays:             10,
+		MaxRoomLists:        10,
+		MaxRooms:            20,
+		MaxItems:            6,
+		PrivacyMode:         model.PrivacyOrganizerAsSubject,
+		Language:            "",
+		ThemePreset:         model.PresetCompact,
+		Theme:               model.DefaultCompactTheme(),
+		BookingEnabled:      true,
+		PollIntervalSeconds: 60,
+	}
+	if err := st.CreateTenant(ctx, &compactTenant); err != nil {
+		t.Fatalf("CreateTenant compact: %v", err)
+	}
+	_ = srv.calMgr.ReloadTenants(ctx)
+	srv.calMgr.SyncTenantNow(ctx, tDef)
+	srv.calMgr.SyncTenantNow(ctx, compactTenant)
+
+	// 4. With global language=en, both Standard and Compact (Language="") render English template labels
+	for _, target := range []string{"/", "/?tenant=nord-compact"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, "Conference Room Availability") || (!strings.Contains(body, "Open") && !strings.Contains(body, "Busy")) {
+			t.Fatalf("expected English template labels on %s, got: %s", target, body)
+		}
+	}
+	for _, target := range []string{"/single-room/midnattssol", "/single-room/midnattssol?tenant=nord-compact"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, `<html lang="en">`) ||
+			!strings.Contains(body, `data-locale="en-GB"`) ||
+			!strings.Contains(body, "Book this room now") ||
+			!strings.Contains(body, "Upcoming") {
+			t.Fatalf("expected English single-room labels on %s, got: %s", target, body)
+		}
+	}
+
+	// 5. Switch language to nb via POST /admin/language and verify persistence in admin & dynamic public templates
+	langForm := url.Values{"language": {"nb"}, "tenant_id": {"1"}}
+	reqSetLang := httptest.NewRequest(http.MethodPost, "/admin/language", strings.NewReader(langForm.Encode()))
+	reqSetLang.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqSetLang.AddCookie(sessionCookie)
+	recSetLang := httptest.NewRecorder()
+	handler.ServeHTTP(recSetLang, reqSetLang)
+	if recSetLang.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on POST /admin/language, got %d", recSetLang.Code)
+	}
+	loc := recSetLang.Header().Get("Location")
+	if !strings.Contains(loc, "flash=") {
+		t.Fatalf("expected flash query param in redirect, got %q", loc)
+	}
+
+	reqDashNB := httptest.NewRequest(http.MethodGet, loc, nil)
+	reqDashNB.AddCookie(sessionCookie)
+	recDashNB := httptest.NewRecorder()
+	handler.ServeHTTP(recDashNB, reqDashNB)
+	dashNBBody := recDashNB.Body.String()
+	if recDashNB.Code != http.StatusOK ||
+		!strings.Contains(dashNBBody, `<html lang="nb">`) ||
+		!strings.Contains(dashNBBody, "Opprett ny tenant") ||
+		!strings.Contains(dashNBBody, "Lagre endringer") ||
+		!strings.Contains(dashNBBody, "Språk oppdatert") ||
+		!strings.Contains(dashNBBody, `name="label_navbar_title" value="" placeholder="Møterom"`) {
+		t.Fatalf("expected persistent Norwegian admin dashboard with Norwegian placeholder, got status=%d", recDashNB.Code)
+	}
+
+	// Both default (Standard) and nord-compact (Compact, Language="") switch template labels to Norwegian
+	for _, target := range []string{"/", "/?tenant=nord-compact"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, "Møterom") || (!strings.Contains(body, "Ledig") && !strings.Contains(body, "Opptatt")) {
+			t.Fatalf("expected Norwegian template labels on %s, got: %s", target, body)
+		}
+	}
+	for _, target := range []string{"/single-room/midnattssol", "/single-room/midnattssol?tenant=nord-compact"} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, `<html lang="nb">`) ||
+			!strings.Contains(body, `data-locale="nb-NO"`) ||
+			!strings.Contains(body, "Book rommet nå") ||
+			!strings.Contains(body, "Kommer") {
+			t.Fatalf("expected Norwegian single-room template labels on %s, got: %s", target, body)
+		}
+	}
+
+	// 6. Custom Section 5 label override applies across languages, while un-overridden fields still follow active language
+	var mpBuf bytes.Buffer
+	mw := multipart.NewWriter(&mpBuf)
+	_ = mw.WriteField("name", tDef.Name)
+	_ = mw.WriteField("slug", tDef.Slug)
+	_ = mw.WriteField("is_default", "1")
+	_ = mw.WriteField("booking_enabled", "1")
+	_ = mw.WriteField("row_layout", model.RowLayoutStandard)
+	_ = mw.WriteField("label_navbar_title", "Custom Board Override")
+	_ = mw.WriteField("label_status_available", "")
+	_ = mw.Close()
+
+	reqUpdate := httptest.NewRequest(http.MethodPost, "/admin/tenants/1", &mpBuf)
+	reqUpdate.Header.Set("Content-Type", mw.FormDataContentType())
+	reqUpdate.AddCookie(sessionCookie)
+	recUpdate := httptest.NewRecorder()
+	handler.ServeHTTP(recUpdate, reqUpdate)
+	if recUpdate.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 on tenant update, got %d", recUpdate.Code)
+	}
+
+	// While global language is nb: custom NavbarTitle + Norwegian StatusAvailable/StatusBusy
+	reqOverrideNB := httptest.NewRequest(http.MethodGet, "/", nil)
+	recOverrideNB := httptest.NewRecorder()
+	handler.ServeHTTP(recOverrideNB, reqOverrideNB)
+	bodyOverrideNB := recOverrideNB.Body.String()
+	if !strings.Contains(bodyOverrideNB, "Custom Board Override") || (!strings.Contains(bodyOverrideNB, "Ledig") && !strings.Contains(bodyOverrideNB, "Opptatt")) {
+		t.Fatalf("expected custom navbar title + Norwegian un-overridden status labels, got: %s", bodyOverrideNB)
+	}
+
+	// Switch global language back to en: custom NavbarTitle stays, while un-overridden StatusAvailable/StatusBusy switch to English
+	if err := st.SetAppLanguage(ctx, "en"); err != nil {
+		t.Fatalf("SetAppLanguage en: %v", err)
+	}
+	reqOverrideEN := httptest.NewRequest(http.MethodGet, "/", nil)
+	recOverrideEN := httptest.NewRecorder()
+	handler.ServeHTTP(recOverrideEN, reqOverrideEN)
+	bodyOverrideEN := recOverrideEN.Body.String()
+	if !strings.Contains(bodyOverrideEN, "Custom Board Override") || (!strings.Contains(bodyOverrideEN, "Open") && !strings.Contains(bodyOverrideEN, "Busy")) {
+		t.Fatalf("expected custom navbar title + English un-overridden status labels, got: %s", bodyOverrideEN)
+	}
+
+	// 7. Explicit per-tenant language override still overrides global language
+	tDefNow, err := st.GetTenantBySlug(ctx, "default")
+	if err != nil {
+		t.Fatalf("GetTenantBySlug reload: %v", err)
+	}
+	tDefNow.Language = "nb"
+	if err := st.UpdateTenant(ctx, &tDefNow, true); err != nil {
+		t.Fatalf("UpdateTenant override nb: %v", err)
+	}
+	_ = srv.calMgr.ReloadTenants(ctx)
+
+	reqSRTenantNB := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
+	recSRTenantNB := httptest.NewRecorder()
+	handler.ServeHTTP(recSRTenantNB, reqSRTenantNB)
+	srTenantNBBody := recSRTenantNB.Body.String()
+	if !strings.Contains(srTenantNBBody, `<html lang="nb">`) ||
+		!strings.Contains(srTenantNBBody, `data-locale="nb-NO"`) ||
+		!strings.Contains(srTenantNBBody, "Book rommet nå") {
+		t.Fatalf("expected explicit tenant language nb to override global en, got: %s", srTenantNBBody)
 	}
 }
 

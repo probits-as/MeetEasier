@@ -49,19 +49,26 @@ To reset or update the admin password from the CLI:
 
 MeetEasier loads settings with **Viper** using the following precedence (highest to lowest):
 
-1. **CLI flags** (e.g. `--port`, `--db-path`, `--log-level`, `--config`)
-2. **Prefixed environment variables (`MEETEASIER_*`)** (e.g. `MEETEASIER_PORT`, `MEETEASIER_ADMIN_USERNAME`, `MEETEASIER_OAUTH_CLIENT_ID`)
-3. **Unprefixed environment variables** (backward-compatible fallback, e.g. `PORT`, `OAUTH_CLIENT_ID`)
+1. **CLI flags** (e.g. `--port`, `--db-path`, `--log-level`, `--lang`, `--config`)
+2. **Prefixed environment variables (`MEETEASIER_*`)** (e.g. `MEETEASIER_PORT`, `MEETEASIER_LANGUAGE`, `MEETEASIER_ADMIN_USERNAME`, `MEETEASIER_OAUTH_CLIENT_ID`)
+3. **Unprefixed environment variables** (backward-compatible fallback, e.g. `PORT`, `LANGUAGE`, `OAUTH_CLIENT_ID`)
 4. **Configuration file** (`--config` / `MEETEASIER_CONFIG_FILE`, or auto-discovered `meeteasier.yaml` / `config.yaml` / `.env` in `.`, `/app/config`, or `/etc/meeteasier`)
-5. **Built-in defaults**
+5. **Built-in defaults** (English `en` interface language by default)
 
-When a configuration file is loaded, MeetEasier watches it automatically (`fsnotify`) and hot-reloads runtime changes such as `log_level` and `admin_api_token` without restarting the server (compatible with Kubernetes `ConfigMap` updates).
+When a configuration file is loaded, MeetEasier watches it automatically (`fsnotify`) and hot-reloads runtime changes such as `log_level`, `language`, and `admin_api_token` without restarting the server (compatible with Kubernetes `ConfigMap` updates).
+
+### Language & Localization
+
+Supported languages: **English (`en`, default)** and **Norsk Bokmål (`nb`)**.
+
+- **Admin UI & Login (`/admin`, `/admin/login`):** Switch interface language directly from the top-bar selector (persisted in SQLite) or via `--lang`, `MEETEASIER_LANGUAGE` (`LANGUAGE`), or `language` in the config file.
+- **Per-Tenant Display Language:** Each tenant defaults to the global interface language (except legacy `compact` preset tenants, which default to `nb`), or can explicitly override `Display & booking language` (`language`) in `/admin` or Theme JSON.
 
 ## Theme Export / Import & Authorized Admin API
 
 Themes can be exported and imported as self-contained JSON bundles (including base64-encoded image assets):
 
-- **Admin UI:** Open `/admin`, select a tenant, and click **Eksporter tema (JSON)** or expand **Importer tema fra JSON**.
+- **Admin UI:** Open `/admin`, select a tenant, and click **Export theme (JSON)** or expand **Import theme from JSON**.
 - **Authorized API (`/api/admin/*`):** Authenticate using any of:
   1. `Authorization: Bearer <MEETEASIER_ADMIN_API_TOKEN>` (when configured)
   2. HTTP Basic Auth (`-u admin:password`)

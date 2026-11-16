@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/probits-as/meeteasier/internal/i18n"
 	"github.com/probits-as/meeteasier/internal/model"
 	"github.com/probits-as/meeteasier/internal/store"
 	"github.com/probits-as/meeteasier/views/admin"
@@ -92,14 +93,27 @@ func (s *Server) handleAdminLoginPage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	lang := s.loginLanguage(r)
+	if q := strings.TrimSpace(r.URL.Query().Get("lang")); q != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "meeteasier_lang",
+			Value:    lang,
+			Path:     "/admin",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   86400 * 30,
+		})
+	}
+	tr := i18n.For(lang)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = admin.AdminLoginPage("").Render(r.Context(), w)
+	_ = admin.AdminLoginPage("", tr).Render(r.Context(), w)
 }
 
 func (s *Server) handleAdminLoginSubmit(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.loginLanguage(r))
 	if err := r.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		_ = admin.AdminLoginPage("Ugyldig forespørsel").Render(r.Context(), w)
+		_ = admin.AdminLoginPage(tr.ErrInvalidRequest, tr).Render(r.Context(), w)
 		return
 	}
 	username := r.FormValue("username")
@@ -109,7 +123,7 @@ func (s *Server) handleAdminLoginSubmit(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		slog.Warn("Admin login failed", "username", username)
 		w.WriteHeader(http.StatusUnauthorized)
-		_ = admin.AdminLoginPage("Feil brukernavn eller passord").Render(r.Context(), w)
+		_ = admin.AdminLoginPage(tr.ErrInvalidCredentials, tr).Render(r.Context(), w)
 		return
 	}
 
@@ -162,16 +176,43 @@ func (s *Server) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	adminUser, _ := r.Context().Value(adminUserCtxKey).(string)
 	flash := r.URL.Query().Get("flash")
 	errMsg := r.URL.Query().Get("error")
+	tr := i18n.For(s.activeLanguage(r))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := admin.AdminDashboardPage(tenants, statuses, selected, flash, errMsg, adminUser).Render(r.Context(), w); err != nil {
+	if err := admin.AdminDashboardPage(tenants, statuses, selected, flash, errMsg, adminUser, tr).Render(r.Context(), w); err != nil {
 		slog.Error("Render admin dashboard failed", "error", err)
 	}
 }
 
-func (s *Server) handleAdminPasswordUpdate(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAdminLanguageUpdate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig skjema")
+		tr := i18n.For(s.activeLanguage(r))
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidForm)
+		return
+	}
+	lang := i18n.Normalize(r.FormValue("language"))
+	tenantID, _ := strconv.ParseInt(r.FormValue("tenant_id"), 10, 64)
+	if err := s.store.SetAppLanguage(r.Context(), lang); err != nil {
+		redirectAdmin(w, r, tenantID, "", err.Error())
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "meeteasier_lang",
+		Value:    lang,
+		Path:     "/admin",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400 * 30,
+	})
+	tr := i18n.For(lang)
+	slog.Info("Admin updated interface language", "language", lang)
+	redirectAdmin(w, r, tenantID, tr.FlashLanguageUpdated, "")
+}
+
+func (s *Server) handleAdminPasswordUpdate(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
+	if err := r.ParseForm(); err != nil {
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidForm)
 		return
 	}
 	adminUser, _ := r.Context().Value(adminUserCtxKey).(string)
@@ -181,12 +222,13 @@ func (s *Server) handleAdminPasswordUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	slog.Info("Admin password updated", "username", adminUser)
-	redirectAdmin(w, r, 0, "Passord oppdatert", "")
+	redirectAdmin(w, r, 0, tr.FlashPasswordUpdated, "")
 }
 
 func (s *Server) handleAdminTenantCreate(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	if err := r.ParseForm(); err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig skjema")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidForm)
 		return
 	}
 	name := strings.TrimSpace(r.FormValue("name"))
@@ -226,19 +268,20 @@ func (s *Server) handleAdminTenantCreate(w http.ResponseWriter, r *http.Request)
 	_ = s.calMgr.ReloadTenants(r.Context())
 	s.calMgr.SyncTenantNow(r.Context(), t)
 	slog.Info("Created tenant", "slug", t.Slug, "id", t.ID)
-	redirectAdmin(w, r, t.ID, "Tenant opprettet", "")
+	redirectAdmin(w, r, t.ID, tr.FlashTenantCreated, "")
 }
 
 func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 
 	existing, err := s.store.GetTenantByID(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		redirectAdmin(w, r, 0, "", "Fant ikke tenant")
+		redirectAdmin(w, r, 0, "", tr.ErrTenantNotFound)
 		return
 	}
 	if err != nil {
@@ -248,7 +291,7 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 
 	r.Body = http.MaxBytesReader(w, r.Body, 8<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		redirectAdmin(w, r, id, "", "Kunne ikke lese skjema / opplasting (maks 8 MB)")
+		redirectAdmin(w, r, id, "", tr.ErrMultipartTooLarge)
 		return
 	}
 
@@ -259,6 +302,7 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 	}
 	t.Domains = strings.TrimSpace(r.FormValue("domains"))
 	t.IsDefault = r.FormValue("is_default") == "1"
+	t.Language = i18n.NormalizeTenantLanguage(r.FormValue("language"))
 	t.PollIntervalSeconds = parseIntDefault(r.FormValue("poll_interval_seconds"), 60)
 
 	t.ProviderType = r.FormValue("provider_type")
@@ -349,23 +393,24 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 	_ = s.calMgr.ReloadTenants(r.Context())
 	s.calMgr.SyncTenantNow(r.Context(), t)
 	slog.Info("Updated tenant", "slug", t.Slug, "id", t.ID)
-	redirectAdmin(w, r, t.ID, "Endringer lagret", "")
+	redirectAdmin(w, r, t.ID, tr.FlashChangesSaved, "")
 }
 
 func (s *Server) handleAdminTenantPreset(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 	t, err := s.store.GetTenantByID(r.Context(), id)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Fant ikke tenant")
+		redirectAdmin(w, r, 0, "", tr.ErrTenantNotFound)
 		return
 	}
 
 	if err := r.ParseForm(); err != nil {
-		redirectAdmin(w, r, id, "", "Ugyldig skjema")
+		redirectAdmin(w, r, id, "", tr.ErrInvalidForm)
 		return
 	}
 	preset := r.FormValue("preset")
@@ -383,33 +428,35 @@ func (s *Server) handleAdminTenantPreset(w http.ResponseWriter, r *http.Request)
 	}
 	_ = s.calMgr.ReloadTenants(r.Context())
 	s.calMgr.SyncTenantNow(r.Context(), t)
-	redirectAdmin(w, r, id, fmt.Sprintf("Tema-preset '%s' lastet inn", preset), "")
+	redirectAdmin(w, r, id, fmt.Sprintf(tr.FlashPresetLoadedFmt, preset), "")
 }
 
 func (s *Server) handleAdminTenantSync(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 	t, err := s.store.GetTenantByID(r.Context(), id)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Fant ikke tenant")
+		redirectAdmin(w, r, 0, "", tr.ErrTenantNotFound)
 		return
 	}
 
 	st := s.calMgr.SyncTenantNow(r.Context(), t)
 	if st.LastError != "" {
-		redirectAdmin(w, r, id, "", "Synkronisering feilet: "+st.LastError)
+		redirectAdmin(w, r, id, "", fmt.Sprintf(tr.ErrSyncFailedFmt, st.LastError))
 		return
 	}
-	redirectAdmin(w, r, id, fmt.Sprintf("Synkronisering OK (%d rom hentet)", len(st.Rooms)), "")
+	redirectAdmin(w, r, id, fmt.Sprintf(tr.FlashSyncOKFmt, len(st.Rooms)), "")
 }
 
 func (s *Server) handleAdminTenantDelete(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 	if err := s.store.DeleteTenant(r.Context(), id); err != nil {
@@ -418,7 +465,7 @@ func (s *Server) handleAdminTenantDelete(w http.ResponseWriter, r *http.Request)
 	}
 	_ = s.calMgr.ReloadTenants(r.Context())
 	slog.Info("Deleted tenant", "id", id)
-	redirectAdmin(w, r, 0, "Tenant slettet", "")
+	redirectAdmin(w, r, 0, tr.FlashTenantDeleted, "")
 }
 
 func (s *Server) saveUploadedAsset(r *http.Request, slug, fieldName, assetKey string) (string, error) {
@@ -427,30 +474,16 @@ func (s *Server) saveUploadedAsset(r *http.Request, slug, fieldName, assetKey st
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("les opplastet fil %s: %w", fieldName, err)
+		return "", fmt.Errorf("read uploaded file %s: %w", fieldName, err)
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(io.LimitReader(file, maxUploadBytes+1))
 	if err != nil {
-		return "", fmt.Errorf("les filinnhold: %w", err)
+		return "", fmt.Errorf("read file contents: %w", err)
 	}
 	if len(data) == 0 {
 		return "", nil
-	}
-	if len(data) > maxUploadBytes {
-		return "", fmt.Errorf("filen %s er for stor (maks 2 MB)", fieldName)
-	}
-
-	contentType := http.DetectContentType(data)
-	if !strings.HasPrefix(contentType, "image/") {
-		// Allow SVG uploaded as text/xml or text/plain if it looks like SVG
-		trimmed := strings.TrimSpace(string(data))
-		if strings.Contains(trimmed, "<svg") {
-			contentType = "image/svg+xml"
-		} else {
-			return "", fmt.Errorf("ugyldig filtype for %s (%s) — kun bilder tillatt", fieldName, contentType)
-		}
 	}
 
 	if err := s.store.ValidateAndSaveAssetBytes(r.Context(), slug, assetKey, data); err != nil {
@@ -459,10 +492,10 @@ func (s *Server) saveUploadedAsset(r *http.Request, slug, fieldName, assetKey st
 	return fmt.Sprintf("/tenant-assets/%s/%s?v=%d", url.PathEscape(slug), url.PathEscape(assetKey), time.Now().Unix()), nil
 }
 
-func readThemeBundleFromMultipart(w http.ResponseWriter, r *http.Request) (model.ThemeBundle, error) {
+func readThemeBundleFromMultipart(w http.ResponseWriter, r *http.Request, tr i18n.Translations) (model.ThemeBundle, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		return model.ThemeBundle{}, errors.New("Kunne ikke lese tema-skjema")
+		return model.ThemeBundle{}, errors.New(tr.ErrJSONFormRead)
 	}
 
 	var rawJSON []byte
@@ -471,25 +504,26 @@ func readThemeBundleFromMultipart(w http.ResponseWriter, r *http.Request) (model
 		var err error
 		rawJSON, err = io.ReadAll(io.LimitReader(file, 8<<20))
 		if err != nil {
-			return model.ThemeBundle{}, errors.New("Kunne ikke lese opplastet JSON-fil")
+			return model.ThemeBundle{}, errors.New(tr.ErrJSONFileRead)
 		}
 	}
 	if len(strings.TrimSpace(string(rawJSON))) == 0 {
 		rawJSON = []byte(r.FormValue("theme_json"))
 	}
 	if len(strings.TrimSpace(string(rawJSON))) == 0 {
-		return model.ThemeBundle{}, errors.New("Velg en JSON-fil eller lim inn JSON først")
+		return model.ThemeBundle{}, errors.New(tr.ErrJSONEmpty)
 	}
 
 	var bundle model.ThemeBundle
 	if err := json.Unmarshal(rawJSON, &bundle); err != nil {
-		return model.ThemeBundle{}, fmt.Errorf("Ugyldig JSON: %w", err)
+		return model.ThemeBundle{}, fmt.Errorf(tr.ErrJSONInvalidFmt, err)
 	}
 	return bundle, nil
 }
 
 func (s *Server) handleAdminTenantImportCreate(w http.ResponseWriter, r *http.Request) {
-	bundle, err := readThemeBundleFromMultipart(w, r)
+	tr := i18n.For(s.activeLanguage(r))
+	bundle, err := readThemeBundleFromMultipart(w, r, tr)
 	if err != nil {
 		redirectAdmin(w, r, 0, "", err.Error())
 		return
@@ -504,22 +538,23 @@ func (s *Server) handleAdminTenantImportCreate(w http.ResponseWriter, r *http.Re
 	_ = s.calMgr.ReloadTenants(r.Context())
 	s.calMgr.SyncTenantNow(r.Context(), t)
 	slog.Info("Imported tenant via Admin UI", "slug", t.Slug, "created", created)
-	flash := "Tenant oppdatert fra JSON"
+	flash := tr.FlashTenantUpdatedJSON
 	if created {
-		flash = "Tenant importert fra JSON"
+		flash = tr.FlashTenantImportedJSON
 	}
 	redirectAdmin(w, r, t.ID, flash, "")
 }
 
 func (s *Server) handleAdminThemeExport(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 	t, err := s.store.GetTenantByID(r.Context(), id)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Fant ikke tenant")
+		redirectAdmin(w, r, 0, "", tr.ErrTenantNotFound)
 		return
 	}
 
@@ -537,18 +572,19 @@ func (s *Server) handleAdminThemeExport(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleAdminThemeImport(w http.ResponseWriter, r *http.Request) {
+	tr := i18n.For(s.activeLanguage(r))
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Ugyldig tenant ID")
+		redirectAdmin(w, r, 0, "", tr.ErrInvalidTenantID)
 		return
 	}
 	t, err := s.store.GetTenantByID(r.Context(), id)
 	if err != nil {
-		redirectAdmin(w, r, 0, "", "Fant ikke tenant")
+		redirectAdmin(w, r, 0, "", tr.ErrTenantNotFound)
 		return
 	}
 
-	bundle, err := readThemeBundleFromMultipart(w, r)
+	bundle, err := readThemeBundleFromMultipart(w, r, tr)
 	if err != nil {
 		redirectAdmin(w, r, id, "", err.Error())
 		return
@@ -567,7 +603,7 @@ func (s *Server) handleAdminThemeImport(w http.ResponseWriter, r *http.Request) 
 	_ = s.calMgr.ReloadTenants(r.Context())
 	s.calMgr.SyncTenantNow(r.Context(), t)
 	slog.Info("Imported theme via Admin UI", "slug", t.Slug, "id", t.ID, "include_metadata", includeMetadata)
-	redirectAdmin(w, r, id, "Tema importert fra JSON", "")
+	redirectAdmin(w, r, id, tr.FlashThemeImportedJSON, "")
 }
 
 func (s *Server) requireAdminAPI(next http.Handler) http.Handler {

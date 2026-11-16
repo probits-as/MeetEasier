@@ -18,6 +18,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/probits-as/meeteasier/internal/config"
+	"github.com/probits-as/meeteasier/internal/i18n"
 	"github.com/probits-as/meeteasier/internal/model"
 )
 
@@ -112,6 +113,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 	max_items INTEGER NOT NULL DEFAULT 6,
 	room_blacklist TEXT NOT NULL DEFAULT '',
 	privacy_mode TEXT NOT NULL DEFAULT 'normal',
+	language TEXT NOT NULL DEFAULT '',
 	booking_enabled INTEGER NOT NULL DEFAULT 0,
 	booking_pin TEXT NOT NULL DEFAULT '',
 	booking_organizer_email TEXT NOT NULL DEFAULT '',
@@ -148,7 +150,42 @@ CREATE TABLE IF NOT EXISTS app_settings (
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
-	return s.ensureTenantColumns(ctx)
+	if err := s.ensureTenantColumns(ctx); err != nil {
+		return err
+	}
+	return s.migrateDynamicLabels(ctx)
+}
+
+func (s *Store) migrateDynamicLabels(ctx context.Context) error {
+	var done string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM app_settings WHERE key = 'migrated_dynamic_labels_v2'`).Scan(&done)
+	if err == nil && done == "1" {
+		return nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("check migrated_dynamic_labels_v2: %w", err)
+	}
+
+	tenants, err := s.ListTenants(ctx)
+	if err != nil {
+		return fmt.Errorf("list tenants for label migration: %w", err)
+	}
+	for _, t := range tenants {
+		changed := model.StripBuiltInDefaultLabels(&t.Theme.Labels)
+		if changed && t.Language == i18n.LangNorwegian && t.ThemePreset == model.PresetCompact {
+			t.Language = ""
+		}
+		if changed {
+			if err := s.UpdateTenant(ctx, &t, false); err != nil {
+				return fmt.Errorf("update tenant %q during label migration: %w", t.Slug, err)
+			}
+		}
+	}
+
+	if _, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO app_settings (key, value) VALUES ('migrated_dynamic_labels_v2', '1')`); err != nil {
+		return fmt.Errorf("record migrated_dynamic_labels_v2: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ensureTenantColumns(ctx context.Context) error {
@@ -178,6 +215,7 @@ func (s *Store) ensureTenantColumns(ctx context.Context) error {
 		col string
 		ddl string
 	}{
+		{"language", `ALTER TABLE tenants ADD COLUMN language TEXT NOT NULL DEFAULT ''`},
 		{"booking_enabled", `ALTER TABLE tenants ADD COLUMN booking_enabled INTEGER NOT NULL DEFAULT 0`},
 		{"booking_pin", `ALTER TABLE tenants ADD COLUMN booking_pin TEXT NOT NULL DEFAULT ''`},
 		{"booking_organizer_email", `ALTER TABLE tenants ADD COLUMN booking_organizer_email TEXT NOT NULL DEFAULT ''`},
@@ -196,7 +234,7 @@ func (s *Store) ensureTenantColumns(ctx context.Context) error {
 const tenantSelectCols = `id, slug, name, domains, is_default, provider_type,
 	oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
 	max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-	privacy_mode, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
+	privacy_mode, language, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
 	theme_preset, theme_json, custom_css, poll_interval_seconds,
 	created_at, updated_at`
 
@@ -270,7 +308,30 @@ func (s *Store) seed(ctx context.Context, cfg config.AppConfig) error {
 		slog.Info("Seeded initial admin user", "username", username)
 	}
 
+	if cfg.LanguageExplicit {
+		if err := s.SetAppLanguage(ctx, cfg.Language); err != nil {
+			return fmt.Errorf("seed app language: %w", err)
+		}
+	}
+
 	return nil
+}
+
+// GetAppLanguage returns the stored interface language from app_settings or normalized fallback.
+func (s *Store) GetAppLanguage(ctx context.Context, fallback string) string {
+	var raw string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM app_settings WHERE key = 'language'`).Scan(&raw)
+	if err == nil && strings.TrimSpace(raw) != "" {
+		return i18n.Normalize(raw)
+	}
+	return i18n.Normalize(fallback)
+}
+
+// SetAppLanguage persists the active interface language in app_settings.
+func (s *Store) SetAppLanguage(ctx context.Context, lang string) error {
+	norm := i18n.Normalize(lang)
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO app_settings (key, value) VALUES ('language', ?)`, norm)
+	return err
 }
 
 // GetOrCreateSessionSecret returns a persistent HMAC signing secret.
@@ -445,21 +506,23 @@ func (s *Store) CreateTenant(ctx context.Context, t *model.Tenant) error {
 		t.BookingPIN = ""
 	}
 
+	t.Language = i18n.NormalizeTenantLanguage(t.Language)
+
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO tenants (
 			slug, name, domains, is_default, provider_type,
 			oauth_client_id, oauth_authority, oauth_client_secret, exchange_domain,
 			max_days, max_room_lists, max_rooms, max_items, room_blacklist,
-			privacy_mode, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
+			privacy_mode, language, booking_enabled, booking_pin, booking_organizer_email, booking_default_subject,
 			theme_preset, theme_json, custom_css, poll_interval_seconds,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
-		t.PrivacyMode, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
+		t.PrivacyMode, t.Language, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
 		t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
 		now, now,
 	)
@@ -543,13 +606,15 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 		}
 	}
 
+	t.Language = i18n.NormalizeTenantLanguage(t.Language)
+
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE tenants SET
 			slug = ?, name = ?, domains = ?, is_default = ?, provider_type = ?,
 			oauth_client_id = ?, oauth_authority = ?, oauth_client_secret = ?, exchange_domain = ?,
 			max_days = ?, max_room_lists = ?, max_rooms = ?, max_items = ?, room_blacklist = ?,
-			privacy_mode = ?, booking_enabled = ?, booking_pin = ?, booking_organizer_email = ?, booking_default_subject = ?,
+			privacy_mode = ?, language = ?, booking_enabled = ?, booking_pin = ?, booking_organizer_email = ?, booking_default_subject = ?,
 			theme_preset = ?, theme_json = ?, custom_css = ?, poll_interval_seconds = ?,
 			updated_at = ?
 		WHERE id = ?
@@ -557,7 +622,7 @@ func (s *Store) UpdateTenant(ctx context.Context, t *model.Tenant, keepSecretWhe
 		t.Slug, t.Name, t.Domains, boolToInt(t.IsDefault), t.ProviderType,
 		t.OAuthClientID, t.OAuthAuthority, t.OAuthClientSecret, t.ExchangeDomain,
 		t.MaxDays, t.MaxRoomLists, t.MaxRooms, t.MaxItems, t.RoomBlacklist,
-		t.PrivacyMode, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
+		t.PrivacyMode, t.Language, boolToInt(t.BookingEnabled), t.BookingPIN, t.BookingOrganizerEmail, t.BookingDefaultSubject,
 		t.ThemePreset, themeJSON, t.CustomCSS, t.PollIntervalSeconds,
 		now, t.ID,
 	)
@@ -735,7 +800,7 @@ func scanTenant(r rowScanner) (model.Tenant, error) {
 		&t.ID, &t.Slug, &t.Name, &t.Domains, &isDefaultInt, &t.ProviderType,
 		&t.OAuthClientID, &t.OAuthAuthority, &t.OAuthClientSecret, &t.ExchangeDomain,
 		&t.MaxDays, &t.MaxRoomLists, &t.MaxRooms, &t.MaxItems, &t.RoomBlacklist,
-		&t.PrivacyMode, &bookingEnabledInt, &t.BookingPIN, &t.BookingOrganizerEmail, &t.BookingDefaultSubject,
+		&t.PrivacyMode, &t.Language, &bookingEnabledInt, &t.BookingPIN, &t.BookingOrganizerEmail, &t.BookingDefaultSubject,
 		&t.ThemePreset, &themeJSON, &t.CustomCSS, &t.PollIntervalSeconds,
 		&t.CreatedAt, &t.UpdatedAt,
 	)

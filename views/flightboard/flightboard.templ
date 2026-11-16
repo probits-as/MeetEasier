@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/probits-as/meeteasier/internal/i18n"
 	"github.com/probits-as/meeteasier/internal/model"
 	"github.com/probits-as/meeteasier/views/layout"
 )
@@ -61,14 +62,14 @@ func statusClass(room model.Room) string {
 	return "meeting-open"
 }
 
-func statusText(tenant model.Tenant, room model.Room) string {
+func statusText(labels model.ThemeLabels, room model.Room) string {
 	if room.ErrorMessage != "" {
-		return tenant.Theme.Labels.StatusError
+		return labels.StatusError
 	}
 	if room.Busy {
-		return tenant.Theme.Labels.StatusBusy
+		return labels.StatusBusy
 	}
-	return tenant.Theme.Labels.StatusAvailable
+	return labels.StatusAvailable
 }
 
 func rowCardClass(room model.Room, isCompact bool) string {
@@ -88,23 +89,23 @@ func rowCardClass(room model.Room, isCompact bool) string {
 	return cls
 }
 
-func prefixLabel(tenant model.Tenant, isCurrent bool) string {
+func prefixLabel(labels model.ThemeLabels, isCurrent bool) string {
 	if isCurrent {
-		if strings.TrimSpace(tenant.Theme.Labels.NowPrefix) != "" {
-			return tenant.Theme.Labels.NowPrefix + ": "
+		if strings.TrimSpace(labels.NowPrefix) != "" {
+			return labels.NowPrefix + ": "
 		}
 		return ""
 	}
-	if strings.TrimSpace(tenant.Theme.Labels.NextUp) != "" {
-		return tenant.Theme.Labels.NextUp + ": "
+	if strings.TrimSpace(labels.NextUp) != "" {
+		return labels.NextUp + ": "
 	}
 	return ""
 }
 
-templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool) {
-	@layout.Base(tenant.Name+" - "+tenant.Theme.Labels.NavbarTitle, tenant) {
+templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool, tr i18n.Translations) {
+	@layout.Base(tenant.Name+" - "+tr.EffectiveLabels(tenant.Theme).NavbarTitle, tenant, tr) {
 		<div id="page-wrap">
-			@Navbar(tenant, status.Roomlists, activeFilter, explicitTenant)
+			@Navbar(tenant, status.Roomlists, activeFilter, explicitTenant, tr.EffectiveLabels(tenant.Theme))
 			<div
 				id="flightboard-content"
 				class="tracker-wrap"
@@ -112,7 +113,7 @@ templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilt
 				hx-trigger="every 30s"
 				hx-swap="innerHTML"
 			>
-				@FlightboardRows(tenant, status, activeFilter, explicitTenant)
+				@FlightboardRows(tenant, status, activeFilter, explicitTenant, tr)
 			</div>
 			if strings.TrimSpace(tenant.Theme.FooterImageURL) != "" {
 				<div class="fb__footer-banner">
@@ -123,7 +124,7 @@ templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilt
 	}
 }
 
-templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explicitTenant bool) {
+templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explicitTenant bool, labels model.ThemeLabels) {
 	<div id="title-bar-wrap">
 		<div class="title-bar">
 			<div class="title-bar-left">
@@ -136,16 +137,16 @@ templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, expli
 						</li>
 					}
 					<li>
-						<span id="fb__navbar-title">{ tenant.Theme.Labels.NavbarTitle }</span>
+						<span id="fb__navbar-title">{ labels.NavbarTitle }</span>
 						<ul id="roomlist-filter" class="dropdown menu fb__dropdown">
 							<li>
 								<a href="#" class="current-filter">
-									{ tenant.Theme.Labels.FilterTitle }
+									{ labels.FilterTitle }
 								</a>
 								<ul class="menu fb__child-dropdown">
 									<li class={ templ.KV("is-active", normalizedFilter(activeFilter) == "") }>
 										<a href={ templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, "")) }>
-											{ tenant.Theme.Labels.FilterAllTitle }
+											{ labels.FilterAllTitle }
 										</a>
 									</li>
 									for _, rl := range roomlists {
@@ -172,37 +173,37 @@ templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, expli
 	</div>
 }
 
-templ FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool) {
+templ FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool, tr i18n.Translations) {
 	if status.IsStale {
 		<div class="stale-banner">
-			<span>Viser bufret kalenderdata (Microsoft Graph utilgjengelig: { status.LastError })</span>
-			<span>Sist synkronisert: { status.LastSync.Format("15:04:05") }</span>
+			<span>{ fmt.Sprintf(tr.StaleBannerFmt, status.LastError) }</span>
+			<span>{ fmt.Sprintf(tr.LastSyncedFmt, status.LastSync.Format("15:04:05")) }</span>
 		</div>
 	}
 	if status.LastError != "" && len(status.Rooms) == 0 {
 		<div class="row">
 			<div class="credentials-error">
-				Kunne ikke hente møterom: { status.LastError }
+				{ fmt.Sprintf(tr.FetchRoomsErrorFmt, status.LastError) }
 			</div>
 		</div>
 	} else if !status.Initialized && len(status.Rooms) == 0 {
 		<p id="fb__spinner-wrap">
-			<img id="fb__spinner" alt="Loading..." src="/svgs/spinner.svg"/>
+			<img id="fb__spinner" alt={ tr.LoadingAlt } src="/svgs/spinner.svg"/>
 		</p>
 	} else {
 		for _, room := range status.Rooms {
 			if roomMatchesFilter(room, activeFilter) {
 				if tenant.Theme.RowLayout == model.RowLayoutCompact {
-					@compactRow(tenant, room, explicitTenant)
+					@compactRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme))
 				} else {
-					@standardRow(tenant, room, explicitTenant)
+					@standardRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme))
 				}
 			}
 		}
 	}
 }
 
-templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
+templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels) {
 	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
 		<div class="row">
 			<div class="medium-12 columns">
@@ -210,7 +211,7 @@ templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
 					<div class="row valign-middle">
 						<div class={ room.RoomAlias + "-status meeting-room__status medium-2 columns" }>
 							<div class={ room.RoomAlias + "-meeting-status " + statusClass(room) } title={ room.ErrorMessage }>
-								{ statusText(tenant, room) }
+								{ statusText(labels, room) }
 							</div>
 						</div>
 						<div class="medium-3 columns">
@@ -223,7 +224,7 @@ templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
 								<div class={ room.RoomAlias + "-meeting-information" }>
 									<div>
 										<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
-											{ prefixLabel(tenant, room.Busy) }
+											{ prefixLabel(labels, room.Busy) }
 										</span>
 										<span class={ room.RoomAlias + "-subject meeting-subject" }>
 											{ room.Appointments[0].Subject }
@@ -261,7 +262,7 @@ templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
 	</div>
 }
 
-templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
+templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels) {
 	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
 		<div class="row">
 			<div class="medium-12 columns">
@@ -271,11 +272,11 @@ templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
 						href={ templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")) }
 						target="_blank"
 					>
-						@compactRowInner(tenant, room)
+						@compactRowInner(tenant, room, labels)
 					</a>
 				} else {
 					<div class={ rowCardClass(room, true) }>
-						@compactRowInner(tenant, room)
+						@compactRowInner(tenant, room, labels)
 					</div>
 				}
 			</div>
@@ -283,14 +284,14 @@ templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool) {
 	</div>
 }
 
-templ compactRowInner(tenant model.Tenant, room model.Room) {
+templ compactRowInner(tenant model.Tenant, room model.Room, labels model.ThemeLabels) {
 	<div class="meeting-room__header">
 		<div class={ room.RoomAlias + "-name meeting-room__name" }>{ room.Name }</div>
 	</div>
 	<div class="meeting-room__content">
 		<div class="meeting-room__status-indicator">
 			<div class={ room.RoomAlias + "-meeting-status " + statusClass(room) } title={ room.ErrorMessage }>
-				{ statusText(tenant, room) }
+				{ statusText(labels, room) }
 			</div>
 		</div>
 		<div class="meeting-room__name-column">
@@ -302,7 +303,7 @@ templ compactRowInner(tenant model.Tenant, room model.Room) {
 					<div class={ room.RoomAlias + "-meeting-information" }>
 						<div>
 							<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
-								{ prefixLabel(tenant, room.Busy) }
+								{ prefixLabel(labels, room.Busy) }
 							</span>
 							<span class={ room.RoomAlias + "-subject meeting-subject" }>
 								{ room.Appointments[0].Subject }
@@ -329,7 +330,7 @@ templ compactRowInner(tenant model.Tenant, room model.Room) {
 					<div class={ room.RoomAlias + "-meeting-information" }>
 						<div>
 							<span class={ room.RoomAlias + "-meeting-upcoming meeting-upcoming" }>
-								{ prefixLabel(tenant, false) }
+								{ prefixLabel(labels, false) }
 							</span>
 							<span class={ room.RoomAlias + "-subject meeting-subject" }>
 								{ room.Appointments[1].Subject }

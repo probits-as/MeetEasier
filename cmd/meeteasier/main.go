@@ -48,9 +48,11 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file (yaml, json, toml, env)")
+	rootCmd.PersistentFlags().String("lang", "en", "Default interface language (en, nb)")
 	rootCmd.PersistentFlags().String("db-path", "./data/meeteasier.db", "Path to SQLite database file")
 	rootCmd.PersistentFlags().String("log-level", "info", "Logging level (debug, info, warn, error)")
 	_ = viper.BindPFlag("config_file", rootCmd.PersistentFlags().Lookup("config"))
+	_ = viper.BindPFlag("language", rootCmd.PersistentFlags().Lookup("lang"))
 	_ = viper.BindPFlag("db_path", rootCmd.PersistentFlags().Lookup("db-path"))
 	_ = viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 
@@ -245,10 +247,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	watching := config.Watch(func(next config.AppConfig) {
 		setLogLevel(next.LogLevel)
+		if next.LanguageExplicit {
+			_ = st.SetAppLanguage(context.Background(), next.Language)
+		}
 		srv.UpdateRuntimeConfig(next)
 		slog.Info("Configuration reloaded",
 			"config_file", next.ConfigFile,
 			"log_level", next.LogLevel,
+			"language", next.Language,
 		)
 	})
 

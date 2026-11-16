@@ -17,6 +17,7 @@ const EnvPrefix = "MEETEASIER"
 
 var knownKeys = []string{
 	"config_file",
+	"language",
 	"port",
 	"host",
 	"db_path",
@@ -43,8 +44,10 @@ var knownKeys = []string{
 // AppConfig holds global server and bootstrap settings loaded via Viper.
 // Precedence (highest to lowest): CLI flags > MEETEASIER_* env > unprefixed env > config file > defaults.
 type AppConfig struct {
-	ConfigFile      string
-	Port            int
+	ConfigFile       string
+	Language         string
+	LanguageExplicit bool
+	Port             int
 	Host            string
 	DBPath          string
 	LogLevel        string
@@ -147,6 +150,7 @@ func WatchViper(v *viper.Viper, onChange func(AppConfig)) bool {
 
 func setupDefaultsAndEnv(v *viper.Viper) {
 	v.SetDefault("config_file", "")
+	// Do not set default for "language" until after reading config so we can detect explicit configuration.
 	v.SetDefault("port", 8080)
 	v.SetDefault("host", "0.0.0.0")
 	v.SetDefault("db_path", "./data/meeteasier.db")
@@ -196,8 +200,16 @@ func autoDiscoverConfig(v *viper.Viper) (bool, error) {
 }
 
 func extractConfig(v *viper.Viper) AppConfig {
+	langExplicit := v.IsSet("language")
+	lang := strings.TrimSpace(v.GetString("language"))
+	if lang == "" {
+		lang = "en"
+	}
+
 	cfg := AppConfig{
 		ConfigFile:         v.ConfigFileUsed(),
+		Language:           lang,
+		LanguageExplicit:   langExplicit,
 		Port:               v.GetInt("port"),
 		Host:               v.GetString("host"),
 		DBPath:             v.GetString("db_path"),

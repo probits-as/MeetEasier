@@ -81,21 +81,11 @@ func DefaultStandardTheme() ThemeConfig {
 		BusyColor:                "#f04124",
 		UpcomingColor:            "#ffae00",
 		ErrorColor:               "#f3840e",
-		Labels: ThemeLabels{
-			NavbarTitle:     "Conference Room Availability",
-			FilterTitle:     "Locations",
-			FilterAllTitle:  "All Conference Rooms",
-			StatusAvailable: "Open",
-			StatusBusy:      "Busy",
-			StatusError:     "Error",
-			NextUp:          "Next Up",
-			NowPrefix:       "",
-			UpcomingTitle:   "Upcoming",
-		},
+		Labels:                   ThemeLabels{},
 	}
 }
 
-// DefaultCompactTheme returns a compact, responsive, two-column theme preset (Norwegian labels).
+// DefaultCompactTheme returns a compact, responsive, two-column theme preset (compact two-column layout).
 func DefaultCompactTheme() ThemeConfig {
 	return ThemeConfig{
 		RowLayout:                RowLayoutCompact,
@@ -114,18 +104,59 @@ func DefaultCompactTheme() ThemeConfig {
 		BusyColor:                "#f04124",
 		UpcomingColor:            "#ffae00",
 		ErrorColor:               "#f3840e",
-		Labels: ThemeLabels{
-			NavbarTitle:     "Møterom",
-			FilterTitle:     "Lokasjoner",
-			FilterAllTitle:  "Alle rom",
-			StatusAvailable: "Ledig",
-			StatusBusy:      "Opptatt",
-			StatusError:     "Feil",
-			NextUp:          "Neste",
-			NowPrefix:       "Nå",
-			UpcomingTitle:   "Kommer",
-		},
+		Labels:                   ThemeLabels{},
 	}
+}
+
+func clearBuiltInLabel(dst *string, defaults ...string) bool {
+	cur := strings.TrimSpace(*dst)
+	if cur == "" {
+		return false
+	}
+	for _, d := range defaults {
+		if cur == d {
+			*dst = ""
+			return true
+		}
+	}
+	return false
+}
+
+// StripBuiltInDefaultLabels clears legacy hardcoded Standard/Compact preset label values
+// so uncustomized tenant labels automatically follow the active language.
+func StripBuiltInDefaultLabels(l *ThemeLabels) bool {
+	if l == nil {
+		return false
+	}
+	changed := false
+	if clearBuiltInLabel(&l.NavbarTitle, "Conference Room Availability", "Møterom") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.FilterTitle, "Locations", "Lokasjoner") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.FilterAllTitle, "All Conference Rooms", "Alle rom") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.StatusAvailable, "Open", "Ledig") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.StatusBusy, "Busy", "Opptatt") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.StatusError, "Error", "Feil") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.NextUp, "Next Up", "Neste") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.NowPrefix, "Now", "Nå") {
+		changed = true
+	}
+	if clearBuiltInLabel(&l.UpcomingTitle, "Upcoming", "Kommer") {
+		changed = true
+	}
+	return changed
 }
 
 // ThemeForPreset returns a copy of the preset theme or falls back to Standard.
@@ -162,6 +193,7 @@ type ThemeBundle struct {
 	RoomBlacklist       string                    `json:"room_blacklist,omitempty"`
 	PollIntervalSeconds   int                       `json:"poll_interval_seconds,omitempty"`
 	PrivacyMode           string                    `json:"privacy_mode,omitempty"`
+	Language              string                    `json:"language,omitempty"`
 	BookingEnabled        *bool                     `json:"booking_enabled,omitempty"`
 	BookingOrganizerEmail string                    `json:"booking_organizer_email,omitempty"`
 	BookingDefaultSubject string                    `json:"booking_default_subject,omitempty"`
@@ -190,6 +222,7 @@ type Tenant struct {
 	MaxItems            int         `json:"max_items"`
 	RoomBlacklist       string      `json:"room_blacklist"`
 	PrivacyMode           string      `json:"privacy_mode"`
+	Language              string      `json:"language"`
 	BookingEnabled        bool        `json:"booking_enabled"`
 	BookingPIN            string      `json:"-"`
 	HasBookingPIN         bool        `json:"has_booking_pin"`

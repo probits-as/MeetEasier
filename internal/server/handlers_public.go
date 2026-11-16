@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/probits-as/meeteasier/internal/i18n"
 	"github.com/probits-as/meeteasier/internal/model"
 	"github.com/probits-as/meeteasier/internal/store"
 	"github.com/probits-as/meeteasier/views/flightboard"
@@ -29,9 +29,10 @@ func (s *Server) handleFlightboardPage(w http.ResponseWriter, r *http.Request) {
 
 	status := s.calMgr.GetStatus(tenant)
 	activeFilter := r.URL.Query().Get("filter")
+	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := flightboard.FlightboardPage(tenant, status, activeFilter, explicitTenant).Render(r.Context(), w); err != nil {
+	if err := flightboard.FlightboardPage(tenant, status, activeFilter, explicitTenant, tr).Render(r.Context(), w); err != nil {
 		slog.Error("Render flightboard page failed", "error", err)
 	}
 }
@@ -45,9 +46,10 @@ func (s *Server) handleFlightboardPartial(w http.ResponseWriter, r *http.Request
 
 	status := s.calMgr.GetStatus(tenant)
 	activeFilter := r.URL.Query().Get("filter")
+	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := flightboard.FlightboardRows(tenant, status, activeFilter, explicitTenant).Render(r.Context(), w); err != nil {
+	if err := flightboard.FlightboardRows(tenant, status, activeFilter, explicitTenant, tr).Render(r.Context(), w); err != nil {
 		slog.Error("Render flightboard partial failed", "error", err)
 	}
 }
@@ -62,12 +64,13 @@ func (s *Server) handleSingleRoomPage(w http.ResponseWriter, r *http.Request) {
 	alias := chi.URLParam(r, "alias")
 	status := s.calMgr.GetStatus(tenant)
 	room, found := s.calMgr.GetRoomByAlias(tenant, alias)
+	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	if !found && status.Initialized {
 		w.WriteHeader(http.StatusNotFound)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := singleroom.SingleRoomPage(tenant, room, alias, found, status.Initialized, explicitTenant, "", "").Render(r.Context(), w); err != nil {
+	if err := singleroom.SingleRoomPage(tenant, room, alias, found, status.Initialized, explicitTenant, tr, "", "").Render(r.Context(), w); err != nil {
 		slog.Error("Render single room page failed", "error", err)
 	}
 }
@@ -82,9 +85,10 @@ func (s *Server) handleSingleRoomPartial(w http.ResponseWriter, r *http.Request)
 	alias := chi.URLParam(r, "alias")
 	status := s.calMgr.GetStatus(tenant)
 	room, found := s.calMgr.GetRoomByAlias(tenant, alias)
+	tr := i18n.For(s.tenantLanguage(r, tenant))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := singleroom.SingleRoomContent(tenant, room, found, status.Initialized, explicitTenant, "", "").Render(r.Context(), w); err != nil {
+	if err := singleroom.SingleRoomContent(tenant, room, found, status.Initialized, explicitTenant, tr, "", "").Render(r.Context(), w); err != nil {
 		slog.Error("Render single room partial failed", "error", err)
 	}
 }
@@ -97,9 +101,10 @@ func (s *Server) handleSingleRoomBook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	alias := chi.URLParam(r, "alias")
+	tr := i18n.For(s.tenantLanguage(r, tenant))
 	if err := r.ParseForm(); err != nil {
 		room, found := s.calMgr.GetRoomByAlias(tenant, alias)
-		s.renderSingleRoomBookResponse(w, r, tenant, room, alias, found, explicitTenant, "", "Ugyldig forespørsel", http.StatusBadRequest)
+		s.renderSingleRoomBookResponse(w, r, tenant, room, alias, found, explicitTenant, tr, "", tr.ErrInvalidRequest, http.StatusBadRequest)
 		return
 	}
 
@@ -120,24 +125,24 @@ func (s *Server) handleSingleRoomBook(w http.ResponseWriter, r *http.Request) {
 		PIN:             strings.TrimSpace(r.FormValue("pin")),
 	}
 
-	room, statusCode, execErr := s.validateAndExecuteBooking(r.Context(), tenant, alias, req)
+	room, statusCode, execErr := s.validateAndExecuteBooking(r, tenant, alias, req, tr)
 	if execErr != nil {
 		_, found := s.calMgr.GetRoomByAlias(tenant, alias)
-		s.renderSingleRoomBookResponse(w, r, tenant, room, alias, found || room.RoomAlias != "", explicitTenant, "", execErr.Error(), statusCode)
+		s.renderSingleRoomBookResponse(w, r, tenant, room, alias, found || room.RoomAlias != "", explicitTenant, tr, "", execErr.Error(), statusCode)
 		return
 	}
 
-	flash := bookingSuccessMessage(req)
-	s.renderSingleRoomBookResponse(w, r, tenant, room, alias, true, explicitTenant, flash, "", http.StatusOK)
+	flash := bookingSuccessMessage(tr, req)
+	s.renderSingleRoomBookResponse(w, r, tenant, room, alias, true, explicitTenant, tr, flash, "", http.StatusOK)
 }
 
-func (s *Server) renderSingleRoomBookResponse(w http.ResponseWriter, r *http.Request, tenant model.Tenant, room model.Room, alias string, found, explicitTenant bool, flashMsg, errMsg string, statusCode int) {
+func (s *Server) renderSingleRoomBookResponse(w http.ResponseWriter, r *http.Request, tenant model.Tenant, room model.Room, alias string, found, explicitTenant bool, tr i18n.Translations, flashMsg, errMsg string, statusCode int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	isHTMX := strings.EqualFold(r.Header.Get("HX-Request"), "true")
 	if isHTMX {
 		// Return 200 for HTMX partial swaps so error banners are rendered inline on the touch panel.
 		w.WriteHeader(http.StatusOK)
-		if err := singleroom.SingleRoomContent(tenant, room, found, true, explicitTenant, flashMsg, errMsg).Render(r.Context(), w); err != nil {
+		if err := singleroom.SingleRoomContent(tenant, room, found, true, explicitTenant, tr, flashMsg, errMsg).Render(r.Context(), w); err != nil {
 			slog.Error("Render single room booking response failed", "error", err)
 		}
 		return
@@ -146,7 +151,7 @@ func (s *Server) renderSingleRoomBookResponse(w http.ResponseWriter, r *http.Req
 	if statusCode >= 400 {
 		w.WriteHeader(statusCode)
 	}
-	if err := singleroom.SingleRoomPage(tenant, room, alias, found, true, explicitTenant, flashMsg, errMsg).Render(r.Context(), w); err != nil {
+	if err := singleroom.SingleRoomPage(tenant, room, alias, found, true, explicitTenant, tr, flashMsg, errMsg).Render(r.Context(), w); err != nil {
 		slog.Error("Render single room booking page failed", "error", err)
 	}
 }
@@ -169,7 +174,8 @@ func (s *Server) handleAPIRoomBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room, statusCode, execErr := s.validateAndExecuteBooking(r.Context(), tenant, req.RoomAlias, req)
+	tr := i18n.For(s.tenantLanguage(r, tenant))
+	room, statusCode, execErr := s.validateAndExecuteBooking(r, tenant, req.RoomAlias, req, tr)
 	if execErr != nil {
 		writeJSON(w, statusCode, map[string]string{"error": execErr.Error()})
 		return
@@ -177,26 +183,30 @@ func (s *Server) handleAPIRoomBooking(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
-		"message": bookingSuccessMessage(req),
+		"message": bookingSuccessMessage(tr, req),
 		"room":    room,
 	})
 }
 
-func (s *Server) validateAndExecuteBooking(ctx context.Context, tenant model.Tenant, alias string, req model.BookingRequest) (model.Room, int, error) {
+func (s *Server) validateAndExecuteBooking(r *http.Request, tenant model.Tenant, alias string, req model.BookingRequest, tr i18n.Translations) (model.Room, int, error) {
 	if !tenant.BookingEnabled {
 		room, _ := s.calMgr.GetRoomByAlias(tenant, alias)
-		return room, http.StatusForbidden, errors.New("Rombooking er deaktivert for denne tenanten")
+		return room, http.StatusForbidden, errors.New(tr.BookingDisabledErr)
 	}
 
 	if tenant.HasBookingPIN {
 		submitted := strings.TrimSpace(req.PIN)
 		if submitted == "" || subtle.ConstantTimeCompare([]byte(submitted), []byte(tenant.BookingPIN)) != 1 {
 			room, _ := s.calMgr.GetRoomByAlias(tenant, alias)
-			return room, http.StatusUnauthorized, errors.New("Feil PIN-kode / passord")
+			return room, http.StatusUnauthorized, errors.New(tr.BookingInvalidPINErr)
 		}
 	}
 
-	room, err := s.calMgr.BookRoom(ctx, tenant, alias, req)
+	if strings.TrimSpace(req.Subject) == "" && strings.TrimSpace(tenant.BookingDefaultSubject) == "" {
+		req.Subject = tr.DefaultBookedSubject
+	}
+
+	room, err := s.calMgr.BookRoom(r.Context(), tenant, alias, req)
 	if err != nil {
 		slog.Warn("Room booking failed", "tenant", tenant.Slug, "room", alias, "action", req.Action, "error", err)
 		return room, http.StatusBadRequest, err
@@ -206,18 +216,18 @@ func (s *Server) validateAndExecuteBooking(ctx context.Context, tenant model.Ten
 	return room, http.StatusOK, nil
 }
 
-func bookingSuccessMessage(req model.BookingRequest) string {
+func bookingSuccessMessage(tr i18n.Translations, req model.BookingRequest) string {
 	switch req.Action {
 	case model.BookingActionBookNow:
-		return fmt.Sprintf("Rommet er booket i %d minutter", req.DurationMinutes)
+		return fmt.Sprintf(tr.FlashBookedNowFmt, req.DurationMinutes)
 	case model.BookingActionBookAfter:
-		return fmt.Sprintf("Rommet er booket i %d min etter pågående møte", req.DurationMinutes)
+		return fmt.Sprintf(tr.FlashBookedAfterFmt, req.DurationMinutes)
 	case model.BookingActionExtend:
-		return fmt.Sprintf("Møtet er forlenget med %d minutter", req.DurationMinutes)
+		return fmt.Sprintf(tr.FlashExtendedFmt, req.DurationMinutes)
 	case model.BookingActionEndNow:
-		return "Møtet er avsluttet og rommet er ledig"
+		return tr.FlashEndedNow
 	default:
-		return "Booking oppdatert"
+		return tr.FlashBookingUpdated
 	}
 }
 

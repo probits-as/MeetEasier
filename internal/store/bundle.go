@@ -63,6 +63,7 @@ func (s *Store) BuildThemeBundle(ctx context.Context, t model.Tenant) (model.The
 		RoomBlacklist:       t.RoomBlacklist,
 		PollIntervalSeconds:   t.PollIntervalSeconds,
 		PrivacyMode:           t.PrivacyMode,
+		Language:              t.Language,
 		BookingOrganizerEmail: t.BookingOrganizerEmail,
 		BookingDefaultSubject: t.BookingDefaultSubject,
 		ThemePreset:           t.ThemePreset,
@@ -104,6 +105,9 @@ func (s *Store) ApplyThemeBundle(ctx context.Context, t *model.Tenant, bundle mo
 	}
 	if strings.TrimSpace(bundle.PrivacyMode) != "" {
 		t.PrivacyMode = strings.TrimSpace(bundle.PrivacyMode)
+	}
+	if strings.TrimSpace(bundle.Language) != "" {
+		t.Language = strings.TrimSpace(bundle.Language)
 	}
 	if strings.TrimSpace(bundle.ThemePreset) != "" {
 		t.ThemePreset = strings.TrimSpace(bundle.ThemePreset)
@@ -150,6 +154,7 @@ func (s *Store) ApplyThemeBundle(ctx context.Context, t *model.Tenant, bundle mo
 	if merged.ErrorColor == "" {
 		merged.ErrorColor = base.ErrorColor
 	}
+	model.StripBuiltInDefaultLabels(&merged.Labels)
 	t.Theme = merged
 	t.CustomCSS = bundle.CustomCSS
 

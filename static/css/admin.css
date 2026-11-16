@@ -332,3 +332,13 @@ a:hover {
   border: 1px solid var(--adm-border);
 }
 
+.adm-lang-select {
+  padding: 0.42rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--adm-border);
+  background: var(--adm-surface-2);
+  color: var(--adm-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+

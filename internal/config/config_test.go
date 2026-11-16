@@ -116,3 +116,79 @@ MEETEASIER_LOG_LEVEL=debug
 	}
 }
 
+
+func TestLanguageConfigPrecedence(t *testing.T) {
+	// 1. Built-in default when unset
+	t.Setenv("MEETEASIER_LANGUAGE", "")
+	t.Setenv("LANGUAGE", "")
+	vDefault := viper.New()
+	cfgDefault, err := LoadFromViper(vDefault)
+	if err != nil {
+		t.Fatalf("LoadFromViper default failed: %v", err)
+	}
+	if cfgDefault.Language != "en" || cfgDefault.LanguageExplicit {
+		t.Fatalf("expected default Language=en LanguageExplicit=false, got %q explicit=%v", cfgDefault.Language, cfgDefault.LanguageExplicit)
+	}
+
+	// 2. Unchanged bound --lang flag does not mark LanguageExplicit
+	fsUnchanged := pflag.NewFlagSet("test-unchanged", pflag.ContinueOnError)
+	fsUnchanged.String("lang", "en", "")
+	vUnchanged := viper.New()
+	if err := vUnchanged.BindPFlag("language", fsUnchanged.Lookup("lang")); err != nil {
+		t.Fatalf("BindPFlag unchanged: %v", err)
+	}
+	cfgUnchanged, err := LoadFromViper(vUnchanged)
+	if err != nil {
+		t.Fatalf("LoadFromViper unchanged failed: %v", err)
+	}
+	if cfgUnchanged.Language != "en" || cfgUnchanged.LanguageExplicit {
+		t.Fatalf("expected unchanged flag Language=en LanguageExplicit=false, got %q explicit=%v", cfgUnchanged.Language, cfgUnchanged.LanguageExplicit)
+	}
+
+	// 3. Config file language is marked explicit
+	tmpDir := t.TempDir()
+	yamlPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(yamlPath, []byte("language: nb\n"), 0o600); err != nil {
+		t.Fatalf("write config.yaml: %v", err)
+	}
+	vFile := viper.New()
+	vFile.Set("config_file", yamlPath)
+	cfgFile, err := LoadFromViper(vFile)
+	if err != nil {
+		t.Fatalf("LoadFromViper file failed: %v", err)
+	}
+	if cfgFile.Language != "nb" || !cfgFile.LanguageExplicit {
+		t.Fatalf("expected config file Language=nb LanguageExplicit=true, got %q explicit=%v", cfgFile.Language, cfgFile.LanguageExplicit)
+	}
+
+	// 4. Prefixed env MEETEASIER_LANGUAGE overrides config file
+	t.Setenv("MEETEASIER_LANGUAGE", "en")
+	vEnv := viper.New()
+	vEnv.Set("config_file", yamlPath)
+	cfgEnv, err := LoadFromViper(vEnv)
+	if err != nil {
+		t.Fatalf("LoadFromViper env failed: %v", err)
+	}
+	if cfgEnv.Language != "en" || !cfgEnv.LanguageExplicit {
+		t.Fatalf("expected env Language=en LanguageExplicit=true, got %q explicit=%v", cfgEnv.Language, cfgEnv.LanguageExplicit)
+	}
+
+	// 5. Explicit --lang flag overrides MEETEASIER_LANGUAGE
+	t.Setenv("MEETEASIER_LANGUAGE", "en")
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	fs.String("lang", "en", "")
+	if err := fs.Parse([]string{"--lang=nb"}); err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	vFlag := viper.New()
+	if err := vFlag.BindPFlag("language", fs.Lookup("lang")); err != nil {
+		t.Fatalf("BindPFlag: %v", err)
+	}
+	cfgFlag, err := LoadFromViper(vFlag)
+	if err != nil {
+		t.Fatalf("LoadFromViper flag failed: %v", err)
+	}
+	if cfgFlag.Language != "nb" || !cfgFlag.LanguageExplicit {
+		t.Fatalf("expected flag Language=nb LanguageExplicit=true, got %q explicit=%v", cfgFlag.Language, cfgFlag.LanguageExplicit)
+	}
+}
