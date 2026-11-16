@@ -83,10 +83,25 @@ jobs:
               with:
                   image-ref: ${{ env.IMAGE }}:v${{ steps.version.outputs.patch }}
                   format: "table"
+                  output: "trivy-summary.txt"
                   exit-code: "0"
                   ignore-unfixed: true
                   vuln-type: "os,library"
                   severity: "CRITICAL,HIGH,MEDIUM"
+
+            - name: Publish Trivy summary to Actions page
+              if: always()
+              run: |
+                  {
+                    echo "### 🛡️ Trivy Container Vulnerability Scan"
+                    echo '```text'
+                    if [ -s trivy-summary.txt ]; then
+                      cat trivy-summary.txt
+                    else
+                      echo "No vulnerabilities found (CRITICAL, HIGH, MEDIUM)."
+                    fi
+                    echo '```'
+                  } | tee -a "$GITHUB_STEP_SUMMARY"
 
             - name: Scan Docker image with Trivy (SARIF)
               uses: aquasecurity/trivy-action@v0.36.0
@@ -103,3 +118,5 @@ jobs:
               if: always()
               with:
                   sarif_file: "trivy-results.sarif"
+                  ref: refs/heads/main
+                  sha: ${{ github.sha }}

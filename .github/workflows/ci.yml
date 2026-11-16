@@ -1,0 +1,57 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+
+jobs:
+    test-and-scan:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+
+            - name: Set up Go
+              uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+
+            - name: Run go vet
+              run: go vet ./...
+
+            - name: Run unit tests
+              run: go test -count=1 -v ./...
+
+            - name: Build Docker image
+              run: docker build -t meeteasier:ci .
+
+            - name: Scan CI Docker image with Trivy
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: meeteasier:ci
+                  format: "table"
+                  output: "trivy-summary.txt"
+                  exit-code: "0"
+                  ignore-unfixed: true
+                  vuln-type: "os,library"
+                  severity: "CRITICAL,HIGH,MEDIUM"
+
+            - name: Publish Trivy summary to Actions page
+              if: always()
+              run: |
+                  {
+                    echo "### 🛡️ Trivy Container Vulnerability Scan (CI)"
+                    echo '```text'
+                    if [ -s trivy-summary.txt ]; then
+                      cat trivy-summary.txt
+                    else
+                      echo "No vulnerabilities found (CRITICAL, HIGH, MEDIUM)."
+                    fi
+                    echo '```'
+                  } | tee -a "$GITHUB_STEP_SUMMARY"
+
