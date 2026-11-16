@@ -36,7 +36,7 @@ task run
 
 - **Flightboard:** `http://localhost:8080/`
 - **Single room view:** `http://localhost:8080/single-room/<room-alias>`
-- **Admin UI:** `http://localhost:8080/admin` (default seeded credentials: `admin` / `admin123`, configurable via `ADMIN_USERNAME` / `ADMIN_PASSWORD`)
+- **Admin UI:** `http://localhost:8080/admin` (default seeded credentials: `admin` / `admin123`, configurable via `MEETEASIER_ADMIN_USERNAME` / `MEETEASIER_ADMIN_PASSWORD`)
 - **JSON API:** `/api/rooms`, `/api/roomlists`, `/api/heartbeat`
 
 To reset or update the admin password from the CLI:
@@ -45,13 +45,25 @@ To reset or update the admin password from the CLI:
 ./bin/meeteasier admin reset-password -u admin -p "new-strong-password"
 ```
 
+## Configuration, Precedence & Hot-Reload
+
+MeetEasier loads settings with **Viper** using the following precedence (highest to lowest):
+
+1. **CLI flags** (e.g. `--port`, `--db-path`, `--log-level`, `--config`)
+2. **Prefixed environment variables (`MEETEASIER_*`)** (e.g. `MEETEASIER_PORT`, `MEETEASIER_ADMIN_USERNAME`, `MEETEASIER_OAUTH_CLIENT_ID`)
+3. **Unprefixed environment variables** (backward-compatible fallback, e.g. `PORT`, `OAUTH_CLIENT_ID`)
+4. **Configuration file** (`--config` / `MEETEASIER_CONFIG_FILE`, or auto-discovered `meeteasier.yaml` / `config.yaml` / `.env` in `.`, `/app/config`, or `/etc/meeteasier`)
+5. **Built-in defaults**
+
+When a configuration file is loaded, MeetEasier watches it automatically (`fsnotify`) and hot-reloads runtime changes such as `log_level` and `admin_api_token` without restarting the server (compatible with Kubernetes `ConfigMap` updates).
+
 ## Theme Export / Import & Authorized Admin API
 
 Themes can be exported and imported as self-contained JSON bundles (including base64-encoded image assets):
 
 - **Admin UI:** Open `/admin`, select a tenant, and click **Eksporter tema (JSON)** or expand **Importer tema fra JSON**.
 - **Authorized API (`/api/admin/*`):** Authenticate using any of:
-  1. `Authorization: Bearer <ADMIN_API_TOKEN>` (when `ADMIN_API_TOKEN` is configured)
+  1. `Authorization: Bearer <MEETEASIER_ADMIN_API_TOKEN>` (when configured)
   2. HTTP Basic Auth (`-u admin:password`)
   3. An active `/admin` session cookie
 
@@ -100,7 +112,7 @@ docker run -p 8080:8080 \
 
 MeetEasier can automatically import or update tenants and themes at startup — ideal for GitOps deployments, ephemeral containers, or read-only infrastructure:
 
-1. **Bootstrap Directory (`BOOTSTRAP_DIR`, default `/app/bootstrap`)**
+1. **Bootstrap Directory (`MEETEASIER_BOOTSTRAP_DIR`, default `/app/bootstrap`)**
    All `*.json` files mounted into `/app/bootstrap` are imported in alphabetical order before the server starts listening.
    - **Docker:** `-v /path/to/my-theme.json:/app/bootstrap/my-theme.json:ro`
    - **Kubernetes (`ConfigMap` / `Secret`):** Mount your JSON bundle under `/app/bootstrap`:
@@ -114,9 +126,9 @@ MeetEasier can automatically import or update tenants and themes at startup — 
          configMap:
            name: meeteasier-theme
      ```
-2. **Explicit File (`BOOTSTRAP_THEME_FILE` or `--bootstrap-file`)**
+2. **Explicit File (`MEETEASIER_BOOTSTRAP_THEME_FILE` or `--bootstrap-file`)**
    Specify one or more comma-separated file paths to import on startup.
-3. **Environment Variable (`BOOTSTRAP_THEME_JSON`)**
+3. **Environment Variable (`MEETEASIER_BOOTSTRAP_THEME_JSON`)**
    Pass raw JSON or a base64-encoded JSON theme bundle directly from a Kubernetes `Secret` / `ExternalSecret`.
 4. **CLI Import / Export**
    Run standalone provisioning commands (for example in a Kubernetes `initContainer` or CI script):
@@ -125,7 +137,7 @@ MeetEasier can automatically import or update tenants and themes at startup — 
    ./bin/meeteasier export default -o ./backup-theme.json
    ```
 
-When bootstrapping a tenant marked `"is_default": true` (or `"slug": "default"`), any unset `OAUTH_CLIENT_ID`, `OAUTH_AUTHORITY`, `OAUTH_CLIENT_SECRET`, `DOMAIN`, and `SEARCH_*` values are automatically inherited from environment variables so secrets stay out of your theme JSON files.
+When bootstrapping a tenant marked `"is_default": true` (or `"slug": "default"`), any unset `MEETEASIER_OAUTH_CLIENT_ID`, `MEETEASIER_OAUTH_AUTHORITY`, `MEETEASIER_OAUTH_CLIENT_SECRET`, `MEETEASIER_DOMAIN`, and `MEETEASIER_SEARCH_*` values (or their unprefixed equivalents) are automatically inherited from environment variables so secrets stay out of your theme JSON files.
 
 ## License
 

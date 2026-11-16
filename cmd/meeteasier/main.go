@@ -23,6 +23,14 @@ import (
 	"github.com/probits-as/meeteasier/internal/store"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
+var logLevelVar = new(slog.LevelVar)
+
 func main() {
 	rootCmd := newRootCmd()
 	if err := rootCmd.Execute(); err != nil {
@@ -33,13 +41,16 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "meeteasier",
-		Short: "MeetEasier multi-tenant conference room display server",
-		RunE:  runServe,
+		Use:     "meeteasier",
+		Short:   "MeetEasier multi-tenant conference room display server",
+		Version: fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
+		RunE:    runServe,
 	}
 
+	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file (yaml, json, toml, env)")
 	rootCmd.PersistentFlags().String("db-path", "./data/meeteasier.db", "Path to SQLite database file")
 	rootCmd.PersistentFlags().String("log-level", "info", "Logging level (debug, info, warn, error)")
+	_ = viper.BindPFlag("config_file", rootCmd.PersistentFlags().Lookup("config"))
 	_ = viper.BindPFlag("db_path", rootCmd.PersistentFlags().Lookup("db-path"))
 	_ = viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
 
@@ -68,7 +79,10 @@ func newRootCmd() *cobra.Command {
 		Short: "Import or update a tenant and theme from a JSON bundle",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Load()
+			cfg, err := config.LoadWithError()
+			if err != nil {
+				return err
+			}
 			setupLogger(cfg.LogLevel)
 
 			raw, err := os.ReadFile(args[0])
@@ -118,7 +132,10 @@ func newRootCmd() *cobra.Command {
 		Short: "Export a tenant theme and assets as a portable JSON bundle",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Load()
+			cfg, err := config.LoadWithError()
+			if err != nil {
+				return err
+			}
 			setupLogger(cfg.LogLevel)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -166,7 +183,10 @@ func newRootCmd() *cobra.Command {
 		Use:   "reset-password",
 		Short: "Reset or create an admin user password",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Load()
+			cfg, err := config.LoadWithError()
+			if err != nil {
+				return err
+			}
 			setupLogger(cfg.LogLevel)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -198,7 +218,10 @@ func newRootCmd() *cobra.Command {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
-	cfg := config.Load()
+	cfg, err := config.LoadWithError()
+	if err != nil {
+		return err
+	}
 	setupLogger(cfg.LogLevel)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -218,24 +241,32 @@ func runServe(cmd *cobra.Command, args []string) error {
 	calMgr := calendar.NewManager(st, calendar.NewMSGraphProvider(), calendar.NewMockProvider())
 	go calMgr.Start(ctx)
 
-	staticDir := viper.GetString("static_dir")
-	if staticDir == "" {
-		staticDir = "static"
-	}
+	srv := server.New(st, calMgr, sessionSecret, cfg.AdminAPIToken, cfg.StaticDir).WithDefaultConfig(cfg)
 
-	srvHandler := server.New(st, calMgr, sessionSecret, cfg.AdminAPIToken, staticDir).WithDefaultConfig(cfg).Router()
+	watching := config.Watch(func(next config.AppConfig) {
+		setLogLevel(next.LogLevel)
+		srv.UpdateRuntimeConfig(next)
+		slog.Info("Configuration reloaded",
+			"config_file", next.ConfigFile,
+			"log_level", next.LogLevel,
+		)
+	})
+
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr(),
-		Handler:           srvHandler,
+		Handler:           srv.Router(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("Starting MeetEasier server",
+			"version", version,
 			"addr", cfg.ListenAddr(),
 			"db_path", cfg.DBPath,
-			"static_dir", staticDir,
+			"static_dir", cfg.StaticDir,
+			"config_file", cfg.ConfigFile,
+			"config_hot_reload", watching,
 		)
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -260,20 +291,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 }
 
 func setupLogger(levelStr string) {
-	var level slog.Level
-	switch strings.ToLower(strings.TrimSpace(levelStr)) {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn", "warning":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
-	}
+	setLogLevel(levelStr)
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
+		Level: logLevelVar,
 	})
 	slog.SetDefault(slog.New(handler))
+}
+
+func setLogLevel(levelStr string) {
+	switch strings.ToLower(strings.TrimSpace(levelStr)) {
+	case "debug":
+		logLevelVar.Set(slog.LevelDebug)
+	case "warn", "warning":
+		logLevelVar.Set(slog.LevelWarn)
+	case "error":
+		logLevelVar.Set(slog.LevelError)
+	default:
+		logLevelVar.Set(slog.LevelInfo)
+	}
 }
 

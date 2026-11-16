@@ -11,7 +11,12 @@ COPY . .
 RUN templ generate
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /out/meeteasier ./cmd/meeteasier
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=unknown
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+    -o /out/meeteasier ./cmd/meeteasier
 
 # Stage 2: Minimal runtime image
 FROM alpine:3.24
@@ -30,6 +35,8 @@ EXPOSE 8080
 
 ENV DB_PATH=/app/data/meeteasier.db
 ENV PORT=8080
+ENV MEETEASIER_DB_PATH=/app/data/meeteasier.db
+ENV MEETEASIER_PORT=8080
 
 ENTRYPOINT ["/app/meeteasier"]
 CMD ["serve"]

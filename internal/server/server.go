@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,8 +23,10 @@ type Server struct {
 	store         *store.Store
 	calMgr        *calendar.Manager
 	sessionSecret []byte
-	adminAPIToken string
 	staticDir     string
+
+	cfgMu         sync.RWMutex
+	adminAPIToken string
 	defaultCfg    config.AppConfig
 }
 
@@ -43,8 +46,32 @@ func New(st *store.Store, calMgr *calendar.Manager, sessionSecret []byte, adminA
 
 // WithDefaultConfig attaches AppConfig so HTTP/API tenant imports can inherit OAuth env defaults.
 func (s *Server) WithDefaultConfig(cfg config.AppConfig) *Server {
+	s.cfgMu.Lock()
 	s.defaultCfg = cfg
+	s.cfgMu.Unlock()
 	return s
+}
+
+// UpdateRuntimeConfig updates hot-reloadable configuration fields thread-safely.
+func (s *Server) UpdateRuntimeConfig(cfg config.AppConfig) {
+	s.cfgMu.Lock()
+	s.adminAPIToken = strings.TrimSpace(cfg.AdminAPIToken)
+	s.defaultCfg = cfg
+	s.cfgMu.Unlock()
+}
+
+func (s *Server) getAdminAPIToken() string {
+	s.cfgMu.RLock()
+	tok := s.adminAPIToken
+	s.cfgMu.RUnlock()
+	return tok
+}
+
+func (s *Server) getDefaultConfig() config.AppConfig {
+	s.cfgMu.RLock()
+	cfg := s.defaultCfg
+	s.cfgMu.RUnlock()
+	return cfg
 }
 
 // Router builds the Chi router with all public, API, static, and admin routes.

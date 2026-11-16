@@ -1,0 +1,77 @@
+version: 2
+
+project_name: meeteasier
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: meeteasier
+    main: ./cmd/meeteasier
+    binary: meeteasier
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - .env.template
+      - static/**/*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  abbrev: 7
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore\\(release\\):"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: "Breaking Changes"
+      regexp: "^.*!:"
+      order: 0
+    - title: "Features"
+      regexp: "^feat(\\(.+\\))?:"
+      order: 1
+    - title: "Bug Fixes"
+      regexp: "^fix(\\(.+\\))?:"
+      order: 2
+    - title: "Enhancements & Maintenance"
+      order: 999
+
+release:
+  github:
+    owner: probits-as
+    name: MeetEasier
+  draft: false
+  prerelease: auto
+  make_latest: true
+

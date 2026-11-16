@@ -3,6 +3,7 @@
 .env
 bin/
 data/
+dist/
 *.db
 *.md
 .DS_Store

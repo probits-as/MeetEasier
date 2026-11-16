@@ -487,7 +487,7 @@ func (s *Server) handleAdminTenantImportCreate(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	t, created, err := s.store.UpsertTenantFromBundle(r.Context(), s.defaultCfg, bundle)
+	t, created, err := s.store.UpsertTenantFromBundle(r.Context(), s.getDefaultConfig(), bundle)
 	if err != nil {
 		redirectAdmin(w, r, 0, "", err.Error())
 		return
@@ -567,7 +567,8 @@ func (s *Server) requireAdminAPI(next http.Handler) http.Handler {
 		// 1. Bearer token (ADMIN_API_TOKEN)
 		if authHdr := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authHdr), "bearer ") {
 			token := strings.TrimSpace(authHdr[len("bearer "):])
-			if s.adminAPIToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.adminAPIToken)) == 1 {
+			expectedTok := s.getAdminAPIToken()
+			if expectedTok != "" && subtle.ConstantTimeCompare([]byte(token), []byte(expectedTok)) == 1 {
 				ctx := context.WithValue(r.Context(), adminUserCtxKey, "api-token")
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -619,7 +620,7 @@ func (s *Server) handleAPIAdminUpsertTenant(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	t, isNew, err := s.store.UpsertTenantFromBundle(r.Context(), s.defaultCfg, bundle)
+	t, isNew, err := s.store.UpsertTenantFromBundle(r.Context(), s.getDefaultConfig(), bundle)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

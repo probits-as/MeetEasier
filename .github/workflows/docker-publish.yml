@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Release
 
 on:
     push:
@@ -13,12 +13,14 @@ jobs:
     build-and-push:
         runs-on: ubuntu-latest
         permissions:
-            contents: read
+            contents: write
             packages: write
 
         steps:
             - name: Checkout
               uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
 
             - name: Parse version from tag
               id: version
@@ -30,6 +32,20 @@ jobs:
                   echo "major=$MAJOR" >> $GITHUB_OUTPUT
                   echo "minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
                   echo "patch=$MAJOR.$MINOR.$PATCH" >> $GITHUB_OUTPUT
+                  echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+            - name: Set up Go
+              uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+
+            - name: Run GoReleaser (GitHub Release, Changelog & Binaries)
+              uses: goreleaser/goreleaser-action@v6
+              with:
+                  version: "~> v2"
+                  args: release --clean
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v4
@@ -48,6 +64,10 @@ jobs:
                   platforms: linux/amd64,linux/arm64
                   push: true
                   no-cache: true
+                  build-args: |
+                      VERSION=${{ github.ref_name }}
+                      COMMIT=${{ github.sha }}
+                      DATE=${{ steps.version.outputs.date }}
                   tags: |
                       ${{ env.IMAGE }}:v${{ steps.version.outputs.major }}
                       ${{ env.IMAGE }}:v${{ steps.version.outputs.minor }}
