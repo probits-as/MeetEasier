@@ -98,14 +98,71 @@ curl -X PUT https://your-host/api/admin/tenants/default/theme \
 2. Grant admin consent for your organization.
 3. Configure `OAuth Client ID`, `OAuth Authority` (`https://login.microsoftonline.com/<tenant-id>`), and `OAuth Client Secret` per tenant in `/admin` (or seed the initial default tenant via `.env` / environment variables from `.env.template`).
 
-## Docker
+## Docker & Docker Compose
+
+Pre-built multi-arch images (`linux/amd64` and `linux/arm64`) are published to GitHub Container Registry:
+https://github.com/probits-as/MeetEasier/pkgs/container/meeteasier
+
+### Quick Run (Mock / Demo mode)
+
+```sh
+docker run -d \
+  --name meeteasier \
+  -p 8080:8080 \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/probits-as/meeteasier:latest
+```
+
+Then open `http://localhost:8080/` for the flightboard or `http://localhost:8080/admin` (`admin` / `admin123`) to configure tenants, domains, and Microsoft 365 credentials.
+
+### Production Run (Persistent DB + Environment Variables + Optional Theme Bootstrap)
+
+```sh
+docker run -d \
+  --name meeteasier \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/my-theme.json:/app/bootstrap/my-theme.json:ro \
+  -e MEETEASIER_ADMIN_USERNAME=admin \
+  -e MEETEASIER_ADMIN_PASSWORD=change-me-strong-password \
+  -e MEETEASIER_ADMIN_API_TOKEN=change-me-api-token \
+  -e MEETEASIER_OAUTH_CLIENT_ID=<your-client-id> \
+  -e MEETEASIER_OAUTH_AUTHORITY=https://login.microsoftonline.com/<tenant-id> \
+  -e MEETEASIER_OAUTH_CLIENT_SECRET=<your-client-secret> \
+  ghcr.io/probits-as/meeteasier:v2
+```
+
+### Docker Compose
+
+```yaml
+services:
+  meeteasier:
+    image: ghcr.io/probits-as/meeteasier:v2
+    container_name: meeteasier
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      # Optional: auto-import theme/tenant JSON bundle on startup
+      # - ./my-theme.json:/app/bootstrap/my-theme.json:ro
+      # Optional: hot-reloaded configuration file
+      # - ./meeteasier.yaml:/app/config/meeteasier.yaml:ro
+    environment:
+      MEETEASIER_ADMIN_USERNAME: admin
+      MEETEASIER_ADMIN_PASSWORD: change-me-strong-password
+      # MEETEASIER_ADMIN_API_TOKEN: change-me-api-token
+      # MEETEASIER_OAUTH_CLIENT_ID: ""
+      # MEETEASIER_OAUTH_AUTHORITY: ""
+      # MEETEASIER_OAUTH_CLIENT_SECRET: ""
+```
+
+### Build Locally
 
 ```sh
 docker build -t meeteasier .
-docker run -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/my-theme.json:/app/bootstrap/my-theme.json:ro \
-  meeteasier
+docker run -p 8080:8080 -v $(pwd)/data:/app/data meeteasier
 ```
 
 ## Automated Provisioning (Docker & Kubernetes)

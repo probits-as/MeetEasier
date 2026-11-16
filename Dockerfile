@@ -20,6 +20,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
 
 # Stage 2: Minimal runtime image
 FROM alpine:3.24
+LABEL org.opencontainers.image.source="https://github.com/probits-as/MeetEasier" \
+      org.opencontainers.image.description="Multi-tenant conference room display server built in Go" \
+      org.opencontainers.image.licenses="GPL-3.0-only"
 RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata \
     && addgroup -g 1001 -S meeteasier \
     && adduser -u 1001 -S -G meeteasier meeteasier
