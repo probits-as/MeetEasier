@@ -29,6 +29,13 @@ type Server struct {
 	cfgMu         sync.RWMutex
 	adminAPIToken string
 	defaultCfg    config.AppConfig
+
+	startedAt    time.Time
+	buildVersion string
+	buildCommit  string
+	metricsMu    sync.Mutex
+	httpReqs     map[string]uint64
+	bookings     map[string]uint64
 }
 
 // New creates a new HTTP Server instance.
@@ -42,6 +49,11 @@ func New(st *store.Store, calMgr *calendar.Manager, sessionSecret []byte, adminA
 		sessionSecret: sessionSecret,
 		adminAPIToken: strings.TrimSpace(adminAPIToken),
 		staticDir:     staticDir,
+		startedAt:     time.Now(),
+		buildVersion:  "dev",
+		buildCommit:   "none",
+		httpReqs:      make(map[string]uint64),
+		bookings:      make(map[string]uint64),
 	}
 }
 
@@ -81,8 +93,14 @@ func (s *Server) Router() http.Handler {
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(slogMiddleware)
+	r.Use(s.slogMiddleware)
 	r.Use(middleware.Recoverer)
+
+	// Health, readiness & Prometheus metrics routes
+	r.Get("/healthz", s.handleHealthz)
+	r.Get("/livez", s.handleHealthz)
+	r.Get("/readyz", s.handleReadyz)
+	r.Get("/metrics", s.handleMetrics)
 
 	// Public display routes
 	r.Get("/", s.handleFlightboardPage)
@@ -97,6 +115,9 @@ func (s *Server) Router() http.Handler {
 		api.Get("/rooms", s.handleAPIRooms)
 		api.Get("/roomlists", s.handleAPIRoomlists)
 		api.Get("/heartbeat", s.handleAPIHeartbeat)
+		api.Get("/healthz", s.handleHealthz)
+		api.Get("/livez", s.handleHealthz)
+		api.Get("/readyz", s.handleReadyz)
 		api.Post("/roombooking", s.handleAPIRoomBooking)
 
 		api.Route("/admin", func(admAPI chi.Router) {
@@ -199,28 +220,49 @@ func (s *Server) tenantLanguage(r *http.Request, t model.Tenant) string {
 	return s.activeLanguage(r)
 }
 
-func slogMiddleware(next http.Handler) http.Handler {
+func (s *Server) slogMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
 
-		// Keep noisy polling logs at debug level; normal requests at info
+		status := ww.Status()
+		if status == 0 {
+			status = http.StatusOK
+		}
+		s.recordHTTPMetric(r.Method, status)
+
+		// Keep noisy polling/probe logs at debug level when healthy; normal requests at info
 		lvl := slog.LevelInfo
-		if strings.HasPrefix(r.URL.Path, "/partials/") ||
+		isNoisy := strings.HasPrefix(r.URL.Path, "/partials/") ||
 			strings.HasPrefix(r.URL.Path, "/css/") ||
 			strings.HasPrefix(r.URL.Path, "/js/") ||
 			strings.HasPrefix(r.URL.Path, "/img/") ||
-			r.URL.Path == "/api/heartbeat" {
-			lvl = slog.LevelDebug
+			r.URL.Path == "/healthz" ||
+			r.URL.Path == "/livez" ||
+			r.URL.Path == "/readyz" ||
+			r.URL.Path == "/metrics" ||
+			r.URL.Path == "/api/heartbeat" ||
+			r.URL.Path == "/api/healthz" ||
+			r.URL.Path == "/api/livez" ||
+			r.URL.Path == "/api/readyz"
+		if isNoisy {
+			if status >= http.StatusBadRequest {
+				lvl = slog.LevelWarn
+			} else {
+				lvl = slog.LevelDebug
+			}
 		}
 
+		dur := time.Since(start)
 		slog.Log(r.Context(), lvl, "http request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"host", r.Host,
-			"status", ww.Status(),
-			"duration", time.Since(start).Round(time.Millisecond),
+			"status", status,
+			"duration", dur.Round(time.Millisecond),
+			"duration_ms", dur.Milliseconds(),
+			"bytes", ww.BytesWritten(),
 			"req_id", middleware.GetReqID(r.Context()),
 		)
 	})

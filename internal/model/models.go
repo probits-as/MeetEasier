@@ -379,9 +379,12 @@ type TenantStatus struct {
 	Roomlists     []string  `json:"roomlists"`
 	LastSync      time.Time `json:"last_sync"`
 	LastError     string    `json:"last_error"`
-	IsStale       bool      `json:"is_stale"`
-	Syncing       bool      `json:"syncing"`
-	Initialized   bool      `json:"initialized"`
+	IsStale                 bool      `json:"is_stale"`
+	Syncing                 bool      `json:"syncing"`
+	Initialized             bool      `json:"initialized"`
+	LastSyncDurationSeconds float64   `json:"last_sync_duration_seconds,omitempty"`
+	SyncSuccessTotal        uint64    `json:"sync_success_total,omitempty"`
+	SyncErrorTotal          uint64    `json:"sync_error_total,omitempty"`
 }
 
 // AdminUser represents an administrator account stored in SQLite.

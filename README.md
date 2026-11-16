@@ -38,6 +38,7 @@ task run
 - **Single room view:** `http://localhost:8080/single-room/<room-alias>`
 - **Admin UI:** `http://localhost:8080/admin` (default seeded credentials: `admin` / `admin123`, configurable via `MEETEASIER_ADMIN_USERNAME` / `MEETEASIER_ADMIN_PASSWORD`)
 - **JSON API:** `/api/rooms`, `/api/roomlists`, `/api/heartbeat`
+- **Health & Metrics:** `/healthz`, `/livez`, `/readyz`, `/metrics`
 
 To reset or update the admin password from the CLI:
 
@@ -49,13 +50,13 @@ To reset or update the admin password from the CLI:
 
 MeetEasier loads settings with **Viper** using the following precedence (highest to lowest):
 
-1. **CLI flags** (e.g. `--port`, `--db-path`, `--log-level`, `--lang`, `--config`)
-2. **Prefixed environment variables (`MEETEASIER_*`)** (e.g. `MEETEASIER_PORT`, `MEETEASIER_LANGUAGE`, `MEETEASIER_ADMIN_USERNAME`, `MEETEASIER_OAUTH_CLIENT_ID`)
-3. **Unprefixed environment variables** (backward-compatible fallback, e.g. `PORT`, `LANGUAGE`, `OAUTH_CLIENT_ID`)
+1. **CLI flags** (e.g. `--port`, `--db-path`, `--log-level`, `--log-format`, `--lang`, `--config`)
+2. **Prefixed environment variables (`MEETEASIER_*`)** (e.g. `MEETEASIER_PORT`, `MEETEASIER_LOG_FORMAT`, `MEETEASIER_LANGUAGE`, `MEETEASIER_ADMIN_USERNAME`, `MEETEASIER_OAUTH_CLIENT_ID`)
+3. **Unprefixed environment variables** (backward-compatible fallback, e.g. `PORT`, `LOG_FORMAT`, `LANGUAGE`, `OAUTH_CLIENT_ID`)
 4. **Configuration file** (`--config` / `MEETEASIER_CONFIG_FILE`, or auto-discovered `meeteasier.yaml` / `config.yaml` / `.env` in `.`, `/app/config`, or `/etc/meeteasier`)
 5. **Built-in defaults** (English `en` interface language by default)
 
-When a configuration file is loaded, MeetEasier watches it automatically (`fsnotify`) and hot-reloads runtime changes such as `log_level`, `language`, and `admin_api_token` without restarting the server (compatible with Kubernetes `ConfigMap` updates).
+When a configuration file is loaded, MeetEasier watches it automatically (`fsnotify`) and hot-reloads runtime changes such as `log_level`, `log_format`, `language`, and `admin_api_token` without restarting the server (compatible with Kubernetes `ConfigMap` updates).
 
 ### Language & Localization
 
@@ -202,6 +203,45 @@ MeetEasier can automatically import or update tenants and themes at startup — 
    ```
 
 When bootstrapping a tenant marked `"is_default": true` (or `"slug": "default"`), any unset `MEETEASIER_OAUTH_CLIENT_ID`, `MEETEASIER_OAUTH_AUTHORITY`, `MEETEASIER_OAUTH_CLIENT_SECRET`, `MEETEASIER_DOMAIN`, and `MEETEASIER_SEARCH_*` values (or their unprefixed equivalents) are automatically inherited from environment variables so secrets stay out of your theme JSON files.
+
+## Observability, Health Probes & Prometheus / Loki (Docker & Kubernetes)
+
+### Health & Readiness Probes
+
+- **Liveness (`GET /livez` / `GET /healthz`):** Returns `200 OK` (`{"status":"ok"}`) when the HTTP server is responsive (intentionally does not fail during temporary Microsoft Graph outages so cached room displays keep working).
+- **Readiness (`GET /readyz` / `GET /api/readyz`):** Verifies SQLite connectivity (`200 OK` with tenant count, or `503 Service Unavailable`).
+- **Docker `HEALTHCHECK`:** Built into the container image using `/app/meeteasier healthcheck` (queries `127.0.0.1:$MEETEASIER_PORT/readyz` with no `curl` dependency).
+- **Legacy Heartbeat (`GET /api/heartbeat`):** Preserved for backward compatibility (`{"status":"OK"}`).
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /livez
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 15
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+```
+
+### Structured Logging for Grafana Loki
+
+All logs write cleanly to `stdout`. Set `MEETEASIER_LOG_FORMAT=json` (or `--log-format=json`) for structured JSON logs ready for Loki / Promtail / Grafana Alloy (`| json` in LogQL). Routine probe, asset, metrics, and partial polling requests are logged at `DEBUG` level unless status is `>= 400`.
+
+### Prometheus Metrics (`GET /metrics`)
+
+Expose standard Prometheus text exposition format on `GET /metrics`:
+
+- `meeteasier_build_info{version,commit}`, `meeteasier_up`, `meeteasier_db_up`
+- `process_uptime_seconds`, `go_goroutines`, `go_memstats_alloc_bytes`
+- `meeteasier_tenant_rooms_total{tenant,provider}`, `meeteasier_tenant_rooms_busy{tenant}`, `meeteasier_tenant_rooms_error{tenant}`
+- `meeteasier_tenant_sync_stale{tenant}`, `meeteasier_tenant_last_sync_timestamp_seconds{tenant}`, `meeteasier_tenant_sync_duration_seconds{tenant}`, `meeteasier_tenant_sync_total{tenant,status}`
+- `meeteasier_room_bookings_total{tenant,action,status}`
+- `meeteasier_http_requests_total{method,status}`
 
 ## License
 

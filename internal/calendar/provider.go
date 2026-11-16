@@ -30,10 +30,13 @@ type tenantCacheEntry struct {
 	roomlists   []string
 	lastSync    time.Time
 	nextSync    time.Time
-	lastError   string
-	isStale     bool
-	syncing     bool
-	initialized bool
+	lastError        string
+	isStale          bool
+	syncing          bool
+	initialized      bool
+	lastSyncDuration time.Duration
+	syncSuccessTotal uint64
+	syncErrorTotal   uint64
 }
 
 // Manager maintains background calendar polling and stale-while-revalidate caches per tenant.
@@ -175,15 +178,18 @@ func (m *Manager) GetStatus(tenant model.Tenant) model.TenantStatus {
 	copy(roomlists, entry.roomlists)
 
 	status := model.TenantStatus{
-		TenantID:    tenant.ID,
-		TenantSlug:  tenant.Slug,
-		Rooms:       rooms,
-		Roomlists:   roomlists,
-		LastSync:    entry.lastSync,
-		LastError:   entry.lastError,
-		IsStale:     entry.isStale,
-		Syncing:     entry.syncing,
-		Initialized: entry.initialized,
+		TenantID:                tenant.ID,
+		TenantSlug:              tenant.Slug,
+		Rooms:                   rooms,
+		Roomlists:               roomlists,
+		LastSync:                entry.lastSync,
+		LastError:               entry.lastError,
+		IsStale:                 entry.isStale,
+		Syncing:                 entry.syncing,
+		Initialized:             entry.initialized,
+		LastSyncDurationSeconds: entry.lastSyncDuration.Seconds(),
+		SyncSuccessTotal:        entry.syncSuccessTotal,
+		SyncErrorTotal:          entry.syncErrorTotal,
 	}
 	m.mu.RUnlock()
 	return status
@@ -336,7 +342,9 @@ func (m *Manager) syncSingle(ctx context.Context, tenant model.Tenant) {
 	fetchCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
+	syncStart := time.Now()
 	rooms, err := provider.FetchRooms(fetchCtx, tenant)
+	syncDur := time.Since(syncStart)
 
 	interval := time.Duration(tenant.PollIntervalSeconds) * time.Second
 	if interval < 10*time.Second {
@@ -350,17 +358,21 @@ func (m *Manager) syncSingle(ctx context.Context, tenant model.Tenant) {
 	if !ok {
 		return
 	}
+	wasDegraded := entry.isStale || entry.lastError != ""
 	entry.syncing = false
+	entry.lastSyncDuration = syncDur
 	entry.nextSync = time.Now().Add(interval)
 
 	if err != nil {
 		entry.lastError = err.Error()
 		entry.isStale = len(entry.rooms) > 0
 		entry.initialized = true
+		entry.syncErrorTotal++
 		slog.Warn("Calendar sync failed; preserving cached data if available",
 			"tenant", tenant.Slug,
 			"provider", tenant.ProviderType,
 			"cached_rooms", len(entry.rooms),
+			"duration_ms", syncDur.Milliseconds(),
 			"error", err,
 		)
 		return
@@ -373,12 +385,25 @@ func (m *Manager) syncSingle(ctx context.Context, tenant model.Tenant) {
 	entry.lastError = ""
 	entry.isStale = false
 	entry.initialized = true
+	entry.syncSuccessTotal++
+
+	if wasDegraded {
+		slog.Info("Calendar sync recovered",
+			"tenant", tenant.Slug,
+			"provider", tenant.ProviderType,
+			"rooms", len(rooms),
+			"roomlists", len(roomlists),
+			"duration_ms", syncDur.Milliseconds(),
+		)
+		return
+	}
 
 	slog.Debug("Calendar sync completed",
 		"tenant", tenant.Slug,
 		"provider", tenant.ProviderType,
 		"rooms", len(rooms),
 		"roomlists", len(roomlists),
+		"duration_ms", syncDur.Milliseconds(),
 	)
 }
 

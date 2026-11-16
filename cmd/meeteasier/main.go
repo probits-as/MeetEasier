@@ -51,10 +51,12 @@ func newRootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().String("lang", "en", "Default interface language (en, nb)")
 	rootCmd.PersistentFlags().String("db-path", "./data/meeteasier.db", "Path to SQLite database file")
 	rootCmd.PersistentFlags().String("log-level", "info", "Logging level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().String("log-format", "text", "Log output format (text, json)")
 	_ = viper.BindPFlag("config_file", rootCmd.PersistentFlags().Lookup("config"))
 	_ = viper.BindPFlag("language", rootCmd.PersistentFlags().Lookup("lang"))
 	_ = viper.BindPFlag("db_path", rootCmd.PersistentFlags().Lookup("db-path"))
 	_ = viper.BindPFlag("log_level", rootCmd.PersistentFlags().Lookup("log-level"))
+	_ = viper.BindPFlag("log_format", rootCmd.PersistentFlags().Lookup("log-format"))
 
 	serveCmd := &cobra.Command{
 		Use:   "serve",
@@ -85,7 +87,7 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			setupLogger(cfg.LogLevel)
+			setupLogger(cfg.LogLevel, cfg.LogFormat)
 
 			raw, err := os.ReadFile(args[0])
 			if err != nil {
@@ -138,7 +140,7 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			setupLogger(cfg.LogLevel)
+			setupLogger(cfg.LogLevel, cfg.LogFormat)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
@@ -189,7 +191,7 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			setupLogger(cfg.LogLevel)
+			setupLogger(cfg.LogLevel, cfg.LogFormat)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -214,8 +216,30 @@ func newRootCmd() *cobra.Command {
 	resetPwCmd.Flags().StringVarP(&resetPass, "password", "p", "", "New password (min 6 chars)")
 	_ = resetPwCmd.MarkFlagRequired("password")
 
+	healthcheckCmd := &cobra.Command{
+		Use:   "healthcheck",
+		Short: "Verify the running MeetEasier server readiness endpoint (/readyz)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadWithError()
+			if err != nil {
+				return err
+			}
+			client := &http.Client{Timeout: 3 * time.Second}
+			target := fmt.Sprintf("http://127.0.0.1:%d/readyz", cfg.Port)
+			resp, err := client.Get(target)
+			if err != nil {
+				return fmt.Errorf("healthcheck failed: %w", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("healthcheck returned status %d", resp.StatusCode)
+			}
+			return nil
+		},
+	}
+
 	adminCmd.AddCommand(resetPwCmd)
-	rootCmd.AddCommand(serveCmd, importCmd, exportCmd, adminCmd)
+	rootCmd.AddCommand(serveCmd, importCmd, exportCmd, adminCmd, healthcheckCmd)
 	return rootCmd
 }
 
@@ -224,7 +248,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	setupLogger(cfg.LogLevel)
+	setupLogger(cfg.LogLevel, cfg.LogFormat)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -243,10 +267,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 	calMgr := calendar.NewManager(st, calendar.NewMSGraphProvider(), calendar.NewMockProvider())
 	go calMgr.Start(ctx)
 
-	srv := server.New(st, calMgr, sessionSecret, cfg.AdminAPIToken, cfg.StaticDir).WithDefaultConfig(cfg)
+	srv := server.New(st, calMgr, sessionSecret, cfg.AdminAPIToken, cfg.StaticDir).
+		WithDefaultConfig(cfg).
+		SetBuildInfo(version, commit)
 
 	watching := config.Watch(func(next config.AppConfig) {
-		setLogLevel(next.LogLevel)
+		setupLogger(next.LogLevel, next.LogFormat)
 		if next.LanguageExplicit {
 			_ = st.SetAppLanguage(context.Background(), next.Language)
 		}
@@ -254,6 +280,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		slog.Info("Configuration reloaded",
 			"config_file", next.ConfigFile,
 			"log_level", next.LogLevel,
+			"log_format", next.LogFormat,
 			"language", next.Language,
 		)
 	})
@@ -296,11 +323,17 @@ func runServe(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func setupLogger(levelStr string) {
+func setupLogger(levelStr, formatStr string) {
 	setLogLevel(levelStr)
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	opts := &slog.HandlerOptions{
 		Level: logLevelVar,
-	})
+	}
+	var handler slog.Handler
+	if strings.EqualFold(strings.TrimSpace(formatStr), "json") {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
 	slog.SetDefault(slog.New(handler))
 }
 

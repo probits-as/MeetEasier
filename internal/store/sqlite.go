@@ -78,6 +78,11 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// Ping verifies that the underlying SQLite database connection is alive.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
 func (s *Store) initPragmas(ctx context.Context, dbPath string) error {
 	pragmas := []string{
 		"PRAGMA busy_timeout = 5000;",

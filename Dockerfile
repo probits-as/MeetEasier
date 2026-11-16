@@ -39,5 +39,7 @@ ENV PORT=8080
 ENV MEETEASIER_DB_PATH=/app/data/meeteasier.db
 ENV MEETEASIER_PORT=8080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/app/meeteasier", "healthcheck"]
+
 ENTRYPOINT ["/app/meeteasier"]
 CMD ["serve"]

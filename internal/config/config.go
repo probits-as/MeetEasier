@@ -22,6 +22,7 @@ var knownKeys = []string{
 	"host",
 	"db_path",
 	"log_level",
+	"log_format",
 	"static_dir",
 	"admin_username",
 	"admin_password",
@@ -51,6 +52,7 @@ type AppConfig struct {
 	Host            string
 	DBPath          string
 	LogLevel        string
+	LogFormat       string
 	StaticDir       string
 	AdminUsername   string
 	AdminPassword   string
@@ -155,6 +157,7 @@ func setupDefaultsAndEnv(v *viper.Viper) {
 	v.SetDefault("host", "0.0.0.0")
 	v.SetDefault("db_path", "./data/meeteasier.db")
 	v.SetDefault("log_level", "info")
+	v.SetDefault("log_format", "text")
 	v.SetDefault("static_dir", "static")
 	v.SetDefault("admin_username", "admin")
 	v.SetDefault("admin_password", "admin123")
@@ -214,6 +217,7 @@ func extractConfig(v *viper.Viper) AppConfig {
 		Host:               v.GetString("host"),
 		DBPath:             v.GetString("db_path"),
 		LogLevel:           v.GetString("log_level"),
+		LogFormat:          strings.ToLower(strings.TrimSpace(v.GetString("log_format"))),
 		StaticDir:          strings.TrimSpace(v.GetString("static_dir")),
 		AdminUsername:      v.GetString("admin_username"),
 		AdminPassword:      v.GetString("admin_password"),
@@ -235,6 +239,9 @@ func extractConfig(v *viper.Viper) AppConfig {
 
 	if cfg.Port <= 0 {
 		cfg.Port = 8080
+	}
+	if cfg.LogFormat == "" {
+		cfg.LogFormat = "text"
 	}
 	if cfg.StaticDir == "" {
 		cfg.StaticDir = "static"

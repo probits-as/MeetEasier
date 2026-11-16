@@ -829,3 +829,45 @@ func itoa(v int64) string {
 		}(),
 	))
 }
+
+func TestHealthProbesAndPrometheusMetrics(t *testing.T) {
+	srv, _, handler := setupTestServer(t)
+	srv.SetBuildInfo("2.0.0-test", "abc1234")
+
+	for _, ep := range []string{"/healthz", "/livez", "/readyz", "/api/healthz", "/api/livez", "/api/readyz", "/api/heartbeat"} {
+		req := httptest.NewRequest(http.MethodGet, ep, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 on %s, got %d: %s", ep, rec.Code, rec.Body.String())
+		}
+	}
+
+	// Trigger a public room request so mock tenant sync metrics and HTTP counters are populated
+	reqHome := httptest.NewRequest(http.MethodGet, "/", nil)
+	recHome := httptest.NewRecorder()
+	handler.ServeHTTP(recHome, reqHome)
+	if recHome.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /, got %d", recHome.Code)
+	}
+
+	reqMetrics := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	recMetrics := httptest.NewRecorder()
+	handler.ServeHTTP(recMetrics, reqMetrics)
+	if recMetrics.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /metrics, got %d", recMetrics.Code)
+	}
+	metricsBody := recMetrics.Body.String()
+	for _, want := range []string{
+		`meeteasier_build_info{version="2.0.0-test",commit="abc1234"} 1`,
+		"meeteasier_up 1",
+		"meeteasier_db_up 1",
+		`meeteasier_tenant_rooms_total{tenant="default",provider="mock"}`,
+		`meeteasier_tenant_sync_stale{tenant="default"} 0`,
+		`meeteasier_http_requests_total{method="GET",status="200"}`,
+	} {
+		if !strings.Contains(metricsBody, want) {
+			t.Fatalf("expected %q in /metrics output, got:\n%s", want, metricsBody)
+		}
+	}
+}

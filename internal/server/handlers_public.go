@@ -207,6 +207,7 @@ func (s *Server) validateAndExecuteBooking(r *http.Request, tenant model.Tenant,
 	}
 
 	room, err := s.calMgr.BookRoom(r.Context(), tenant, alias, req)
+	s.recordBookingMetric(tenant.Slug, req.Action, err == nil)
 	if err != nil {
 		slog.Warn("Room booking failed", "tenant", tenant.Slug, "room", alias, "action", req.Action, "error", err)
 		return room, http.StatusBadRequest, err
