@@ -291,14 +291,14 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</span><br><ul id=\"roomlist-filter\" class=\"dropdown menu fb__dropdown\"><li><a href=\"#\" class=\"current-filter\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</span><ul id=\"roomlist-filter\" class=\"dropdown menu fb__dropdown\"><li><a href=\"#\" class=\"current-filter\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(tenant.Theme.Labels.FilterTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 144, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 143, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -333,7 +333,7 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 		var templ_7745c5c3_Var13 templ.SafeURL
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, "")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 148, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 147, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -346,7 +346,7 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(tenant.Theme.Labels.FilterAllTitle)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 149, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 148, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -382,7 +382,7 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 			var templ_7745c5c3_Var17 templ.SafeURL
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(buildURL("/", tenant.Slug, explicitTenant, model.Slugify(rl))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 154, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 153, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -395,7 +395,7 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(rl)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 155, Col: 16}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 154, Col: 16}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -413,7 +413,7 @@ func Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explic
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(time.Now().Format("15:04:05"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 168, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 167, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -456,7 +456,7 @@ func FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilte
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(status.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 179, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 178, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -469,7 +469,7 @@ func FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilte
 			var templ_7745c5c3_Var22 string
 			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(status.LastSync.Format("15:04:05"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 180, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 179, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -488,7 +488,7 @@ func FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilte
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(status.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 186, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 185, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -636,7 +636,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(room.ErrorMessage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 213, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 212, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
@@ -649,7 +649,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(statusText(tenant, room))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 214, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 213, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 		if templ_7745c5c3_Err != nil {
@@ -684,7 +684,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(room.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 219, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 218, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 		if templ_7745c5c3_Err != nil {
@@ -742,7 +742,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(prefixLabel(tenant, room.Busy))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 227, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 226, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
@@ -777,7 +777,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[0].Subject)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 230, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 229, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
@@ -812,7 +812,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[0].Start, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 236, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 235, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 			if templ_7745c5c3_Err != nil {
@@ -825,7 +825,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[0].End, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 237, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 236, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -838,7 +838,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatBool(tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 238, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 237, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -851,7 +851,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 240, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 239, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -886,7 +886,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var54 string
 			templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[0].Organizer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 243, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 242, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 			if templ_7745c5c3_Err != nil {
@@ -909,7 +909,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var55 templ.SafeURL
 			templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 250, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 249, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 			if templ_7745c5c3_Err != nil {
@@ -922,7 +922,7 @@ func standardRow(tenant model.Tenant, room model.Room, explicitTenant bool) temp
 			var templ_7745c5c3_Var56 string
 			templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(room.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 250, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 249, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 			if templ_7745c5c3_Err != nil {
@@ -1010,7 +1010,7 @@ func compactRow(tenant model.Tenant, room model.Room, explicitTenant bool) templ
 			var templ_7745c5c3_Var62 templ.SafeURL
 			templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 272, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 271, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 			if templ_7745c5c3_Err != nil {
@@ -1118,7 +1118,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 		var templ_7745c5c3_Var68 string
 		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(room.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 289, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 288, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 		if templ_7745c5c3_Err != nil {
@@ -1153,7 +1153,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(room.ErrorMessage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 293, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 292, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1166,7 +1166,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 		var templ_7745c5c3_Var72 string
 		templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(statusText(tenant, room))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 294, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 293, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 		if templ_7745c5c3_Err != nil {
@@ -1201,7 +1201,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 		var templ_7745c5c3_Var75 string
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(room.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 298, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 297, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
@@ -1263,7 +1263,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(prefixLabel(tenant, room.Busy))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 306, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 305, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 			if templ_7745c5c3_Err != nil {
@@ -1298,7 +1298,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var83 string
 			templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[0].Subject)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 309, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 308, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 			if templ_7745c5c3_Err != nil {
@@ -1333,7 +1333,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var86 string
 			templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[0].Start, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 315, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 314, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 			if templ_7745c5c3_Err != nil {
@@ -1346,7 +1346,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var87 string
 			templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[0].End, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 316, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 315, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 			if templ_7745c5c3_Err != nil {
@@ -1359,7 +1359,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var88 string
 			templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatBool(tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 317, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 316, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
 			if templ_7745c5c3_Err != nil {
@@ -1372,7 +1372,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var89 string
 			templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 319, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 318, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 			if templ_7745c5c3_Err != nil {
@@ -1407,7 +1407,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var92 string
 			templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[0].Organizer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 322, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 321, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 			if templ_7745c5c3_Err != nil {
@@ -1474,7 +1474,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var97 string
 			templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(prefixLabel(tenant, false))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 333, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 332, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 			if templ_7745c5c3_Err != nil {
@@ -1509,7 +1509,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var100 string
 			templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[1].Subject)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 336, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 335, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 			if templ_7745c5c3_Err != nil {
@@ -1544,7 +1544,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var103 string
 			templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[1].Start, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 342, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 341, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 			if templ_7745c5c3_Err != nil {
@@ -1557,7 +1557,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var104 string
 			templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatInt(room.Appointments[1].End, 10))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 343, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 342, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
 			if templ_7745c5c3_Err != nil {
@@ -1570,7 +1570,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var105 string
 			templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.FormatBool(tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 344, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 343, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 			if templ_7745c5c3_Err != nil {
@@ -1583,7 +1583,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var106 string
 			templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(formatInitialTimeRange(room.Appointments[1].Start, room.Appointments[1].End, tenant.Theme.ShowWeekdayInTime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 346, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 345, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 			if templ_7745c5c3_Err != nil {
@@ -1618,7 +1618,7 @@ func compactRowInner(tenant model.Tenant, room model.Room) templ.Component {
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(room.Appointments[1].Organizer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 349, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/flightboard/flightboard.templ`, Line: 348, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 			if templ_7745c5c3_Err != nil {

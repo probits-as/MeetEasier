@@ -163,16 +163,15 @@ a {
 .fb__nav-menu li {
   text-transform: uppercase;
   font-size: 1.3vw;
-  line-height: 1.6;
+  line-height: 2;
   color: var(--primary-font);
   padding: 8px 30px;
 }
 
-@media screen and (max-width: 900px) {
-  .fb__nav-menu li {
-    font-size: 16px;
-    padding: 8px 14px;
-  }
+#fb__navbar-title {
+  display: block;
+  line-height: 1.15;
+  font-weight: 300;
 }
 
 .fb__nav-menu img {
@@ -182,15 +181,26 @@ a {
 
 .fb__nav-menu .fb__dropdown {
   position: relative;
-  display: inline-block;
+  display: block;
   margin-top: 2px;
 }
 
 .fb__nav-menu .fb__dropdown > li {
   position: relative;
   line-height: normal;
-  padding: 0;
+  padding: 0 30px;
   font-size: 14px;
+}
+
+@media screen and (max-width: 900px) {
+  .fb__nav-menu li {
+    font-size: 16px;
+    padding: 8px 14px;
+  }
+
+  .fb__nav-menu .fb__dropdown > li {
+    padding: 0 14px;
+  }
 }
 
 .fb__nav-menu .fb__dropdown > li > a.current-filter {
@@ -199,13 +209,18 @@ a {
   gap: 6px;
   color: var(--primary-font);
   cursor: pointer;
-  padding: 4px 0;
+  padding: 2px 0;
   opacity: 0.9;
 }
 
 .fb__nav-menu .fb__dropdown > li > a.current-filter::after {
-  content: '▾';
-  font-size: 12px;
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #2199e8;
 }
 
 .fb__nav-menu .fb__child-dropdown {

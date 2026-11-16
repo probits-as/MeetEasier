@@ -15,6 +15,7 @@ jobs:
         permissions:
             contents: write
             packages: write
+            security-events: write
 
         steps:
             - name: Checkout
@@ -76,3 +77,29 @@ jobs:
                       ${{ env.IMAGE }}:${{ steps.version.outputs.minor }}
                       ${{ env.IMAGE }}:${{ steps.version.outputs.patch }}
                       ${{ env.IMAGE }}:latest
+
+            - name: Scan Docker image with Trivy (summary)
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ env.IMAGE }}:v${{ steps.version.outputs.patch }}
+                  format: "table"
+                  exit-code: "0"
+                  ignore-unfixed: true
+                  vuln-type: "os,library"
+                  severity: "CRITICAL,HIGH,MEDIUM"
+
+            - name: Scan Docker image with Trivy (SARIF)
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ env.IMAGE }}:v${{ steps.version.outputs.patch }}
+                  format: "sarif"
+                  output: "trivy-results.sarif"
+                  ignore-unfixed: true
+                  vuln-type: "os,library"
+                  severity: "CRITICAL,HIGH"
+
+            - name: Upload Trivy scan results to GitHub Security
+              uses: github/codeql-action/upload-sarif@v4
+              if: always()
+              with:
+                  sarif_file: "trivy-results.sarif"
