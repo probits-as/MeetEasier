@@ -27,12 +27,6 @@ func appendTenantQuery(path, tenantSlug string, explicitTenant bool) string {
 	return path
 }
 
-func formatSingleRoomTime(startMs, endMs int64) string {
-	s := time.UnixMilli(startMs).Local()
-	e := time.UnixMilli(endMs).Local()
-	return fmt.Sprintf("%s - %s", s.Format("02 Mon 15:04"), e.Format("Mon 15:04"))
-}
-
 func nextUpLabel(labels model.ThemeLabels, busy bool) string {
 	if busy {
 		return ""
@@ -103,7 +97,7 @@ templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initia
 					}
 				>
 					if len(room.Appointments) > 0 {
-						{ formatSingleRoomTime(room.Appointments[0].Start, room.Appointments[0].End) }
+						{ tr.FormatTimeRange(room.Appointments[0].Start, room.Appointments[0].End, true, tenant.Theme) }
 					}
 				</div>
 				<div id="single-room__meeting-organizer">
@@ -118,7 +112,7 @@ templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initia
 			<div class="columns small-4 right-col">
 				<div id="single-room__clock-wrap">
 					<div id="single-room__clock">
-						<div id="single-room__time">{ time.Now().Format("15:04") }</div>
+						<div id="single-room__time">{ tr.FormatClock(time.Now(), tenant.Theme, false) }</div>
 						<div id="single-room__date">{ time.Now().Format("January 02") }</div>
 					</div>
 				</div>
@@ -136,7 +130,7 @@ templ SingleRoomContent(tenant model.Tenant, room model.Room, found bool, initia
 									data-show-weekday="true"
 								>
 									if appt.Start > 0 && appt.End > 0 {
-										{ formatSingleRoomTime(appt.Start, appt.End) }
+										{ tr.FormatTimeRange(appt.Start, appt.End, true, tenant.Theme) }
 									}
 								</td>
 							</tr>

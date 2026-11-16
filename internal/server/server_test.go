@@ -669,7 +669,8 @@ func TestLanguageSelectorAndI18n(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		body := rec.Body.String()
 		if !strings.Contains(body, `<html lang="en">`) ||
-			!strings.Contains(body, `data-locale="en-GB"`) ||
+			!strings.Contains(body, `data-locale="en-US"`) ||
+			!strings.Contains(body, `data-hour12="true"`) ||
 			!strings.Contains(body, "Book this room now") ||
 			!strings.Contains(body, "Upcoming") {
 			t.Fatalf("expected English single-room labels on %s, got: %s", target, body)
@@ -722,6 +723,7 @@ func TestLanguageSelectorAndI18n(t *testing.T) {
 		body := rec.Body.String()
 		if !strings.Contains(body, `<html lang="nb">`) ||
 			!strings.Contains(body, `data-locale="nb-NO"`) ||
+			!strings.Contains(body, `data-hour12="false"`) ||
 			!strings.Contains(body, "Book rommet nå") ||
 			!strings.Contains(body, "Kommer") {
 			t.Fatalf("expected Norwegian single-room template labels on %s, got: %s", target, body)
@@ -787,8 +789,35 @@ func TestLanguageSelectorAndI18n(t *testing.T) {
 	srTenantNBBody := recSRTenantNB.Body.String()
 	if !strings.Contains(srTenantNBBody, `<html lang="nb">`) ||
 		!strings.Contains(srTenantNBBody, `data-locale="nb-NO"`) ||
+		!strings.Contains(srTenantNBBody, `data-hour12="false"`) ||
 		!strings.Contains(srTenantNBBody, "Book rommet nå") {
 		t.Fatalf("expected explicit tenant language nb to override global en, got: %s", srTenantNBBody)
+	}
+
+	// 8. Explicit TimeFormat override overrides language clock default (12h on nb, 24h on en)
+	tDefNow.Theme.TimeFormat = model.TimeFormat12H
+	if err := st.UpdateTenant(ctx, &tDefNow, true); err != nil {
+		t.Fatalf("UpdateTenant time_format 12h: %v", err)
+	}
+	_ = srv.calMgr.ReloadTenants(ctx)
+	req12H := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
+	rec12H := httptest.NewRecorder()
+	handler.ServeHTTP(rec12H, req12H)
+	if !strings.Contains(rec12H.Body.String(), `data-hour12="true"`) {
+		t.Fatalf("expected explicit 12h TimeFormat to force data-hour12=true on nb, got: %s", rec12H.Body.String())
+	}
+
+	tDefNow.Language = "en"
+	tDefNow.Theme.TimeFormat = model.TimeFormat24H
+	if err := st.UpdateTenant(ctx, &tDefNow, true); err != nil {
+		t.Fatalf("UpdateTenant time_format 24h: %v", err)
+	}
+	_ = srv.calMgr.ReloadTenants(ctx)
+	req24H := httptest.NewRequest(http.MethodGet, "/single-room/midnattssol", nil)
+	rec24H := httptest.NewRecorder()
+	handler.ServeHTTP(rec24H, req24H)
+	if !strings.Contains(rec24H.Body.String(), `data-hour12="false"`) {
+		t.Fatalf("expected explicit 24h TimeFormat to force data-hour12=false on en, got: %s", rec24H.Body.String())
 	}
 }
 

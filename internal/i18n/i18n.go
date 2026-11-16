@@ -1,7 +1,9 @@
 package i18n
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/probits-as/meeteasier/internal/model"
 )
@@ -46,8 +48,9 @@ func NormalizeTenantLanguage(code string) string {
 
 // Translations holds localized UI strings for Admin, Flightboard, and Single-Room screens.
 type Translations struct {
-	LangCode string
-	Locale   string
+	LangCode      string
+	Locale        string
+	Default24Hour bool
 
 	// Admin chrome & auth
 	AdminLoginPageTitle     string
@@ -155,6 +158,10 @@ type Translations struct {
 	RowLayoutCompactOption     string
 	SingleRoomStatusSizeLabel  string
 	ShowWeekdayInTimeLabel     string
+	TimeFormatLabel            string
+	TimeFormatAutoOption       string
+	TimeFormat24HOption        string
+	TimeFormat12HOption        string
 	NavbarLogoLabel            string
 	FooterBannerLabel          string
 	SingleRoomLogoLabel        string
@@ -243,8 +250,9 @@ type Translations struct {
 
 var catalog = map[string]Translations{
 	LangEnglish: {
-		LangCode: "en",
-		Locale:   "en-GB",
+		LangCode:      "en",
+		Locale:        "en-US",
+		Default24Hour: false,
 
 		AdminLoginPageTitle:     "Sign in - MeetEasier Admin",
 		AdminDashboardPageTitle: "Tenants - MeetEasier Admin",
@@ -349,6 +357,10 @@ var catalog = map[string]Translations{
 		RowLayoutCompactOption:     "Compact (Clickable row, Now + Next in 2 columns, portrait support)",
 		SingleRoomStatusSizeLabel:  "Single-room status font size",
 		ShowWeekdayInTimeLabel:     "Show weekday and date on Flightboard event times",
+		TimeFormatLabel:            "Clock format",
+		TimeFormatAutoOption:       "Follow language (12-hour AM/PM for English, 24-hour for Norwegian)",
+		TimeFormat24HOption:        "24-hour (14:30)",
+		TimeFormat12HOption:        "12-hour (2:30 PM)",
 		NavbarLogoLabel:            "Navbar Logo URL",
 		FooterBannerLabel:          "Footer Banner / Slogan URL",
 		SingleRoomLogoLabel:        "Single-Room Logo URL",
@@ -433,8 +445,9 @@ var catalog = map[string]Translations{
 		DefaultBookedSubject:        "Booked by MeetEasier",
 	},
 	LangNorwegian: {
-		LangCode: "nb",
-		Locale:   "nb-NO",
+		LangCode:      "nb",
+		Locale:        "nb-NO",
+		Default24Hour: true,
 
 		AdminLoginPageTitle:     "Logg inn - MeetEasier Admin",
 		AdminDashboardPageTitle: "Tenants - MeetEasier Admin",
@@ -539,6 +552,10 @@ var catalog = map[string]Translations{
 		RowLayoutCompactOption:     "Kompakt (Klikkbar rad, Nå + Neste i 2 kolonner, stående støtte)",
 		SingleRoomStatusSizeLabel:  "Enkeltrom status-skriftstørrelse",
 		ShowWeekdayInTimeLabel:     "Vis ukedag og dato på tidspunkter i Flightboard",
+		TimeFormatLabel:            "Klokkeformat",
+		TimeFormatAutoOption:       "Følg valgt språk (24-timers for norsk, 12-timers AM/PM for engelsk)",
+		TimeFormat24HOption:        "24-timers (14:30)",
+		TimeFormat12HOption:        "12-timers (2:30 PM)",
 		NavbarLogoLabel:            "Navbar Logo URL",
 		FooterBannerLabel:          "Footer Banner / Slagord URL",
 		SingleRoomLogoLabel:        "Enkeltrom Logo URL",
@@ -672,5 +689,47 @@ func (tr Translations) EffectiveLabels(theme model.ThemeConfig) model.ThemeLabel
 		NextUp:          pickLabel(theme.Labels.NextUp, tr.DefaultNextUp),
 		UpcomingTitle:   pickLabel(theme.Labels.UpcomingTitle, tr.DefaultUpcomingTitle),
 	}
+}
+
+// Use24Hour returns true if 24-hour time formatting should be used for the given theme and language.
+func (tr Translations) Use24Hour(theme model.ThemeConfig) bool {
+	switch strings.ToLower(strings.TrimSpace(theme.TimeFormat)) {
+	case model.TimeFormat24H:
+		return true
+	case model.TimeFormat12H:
+		return false
+	default:
+		return tr.Default24Hour
+	}
+}
+
+// FormatClock formats a time.Time for initial server-rendered clock display.
+func (tr Translations) FormatClock(t time.Time, theme model.ThemeConfig, withSeconds bool) string {
+	if tr.Use24Hour(theme) {
+		if withSeconds {
+			return t.Format("15:04:05")
+		}
+		return t.Format("15:04")
+	}
+	if withSeconds {
+		return t.Format("3:04:05 PM")
+	}
+	return t.Format("3:04 PM")
+}
+
+// FormatTimeRange formats a meeting start/end timestamp pair for initial server-rendered display.
+func (tr Translations) FormatTimeRange(startMs, endMs int64, showWeekday bool, theme model.ThemeConfig) string {
+	s := time.UnixMilli(startMs).Local()
+	e := time.UnixMilli(endMs).Local()
+	if tr.Use24Hour(theme) {
+		if showWeekday {
+			return fmt.Sprintf("%s - %s", s.Format("02 Mon 15:04"), e.Format("Mon 15:04"))
+		}
+		return fmt.Sprintf("%s - %s", s.Format("15:04"), e.Format("15:04"))
+	}
+	if showWeekday {
+		return fmt.Sprintf("%s - %s", s.Format("02 Mon 3:04 PM"), e.Format("Mon 3:04 PM"))
+	}
+	return fmt.Sprintf("%s - %s", s.Format("3:04 PM"), e.Format("3:04 PM"))
 }
 

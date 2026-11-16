@@ -26,15 +26,6 @@ func buildURL(path, tenantSlug string, explicitTenant bool, filter string) strin
 	return path
 }
 
-func formatInitialTimeRange(startMs, endMs int64, showWeekday bool) string {
-	s := time.UnixMilli(startMs).Local()
-	e := time.UnixMilli(endMs).Local()
-	if showWeekday {
-		return fmt.Sprintf("%s - %s", s.Format("02 Mon 15:04"), e.Format("Mon 15:04"))
-	}
-	return fmt.Sprintf("%s - %s", s.Format("15:04"), e.Format("15:04"))
-}
-
 func normalizedFilter(f string) string {
 	f = strings.TrimSpace(strings.ToLower(f))
 	f = strings.TrimPrefix(f, "roomlist-")
@@ -105,7 +96,7 @@ func prefixLabel(labels model.ThemeLabels, isCurrent bool) string {
 templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilter string, explicitTenant bool, tr i18n.Translations) {
 	@layout.Base(tenant.Name+" - "+tr.EffectiveLabels(tenant.Theme).NavbarTitle, tenant, tr) {
 		<div id="page-wrap">
-			@Navbar(tenant, status.Roomlists, activeFilter, explicitTenant, tr.EffectiveLabels(tenant.Theme))
+			@Navbar(tenant, status.Roomlists, activeFilter, explicitTenant, tr.EffectiveLabels(tenant.Theme), tr)
 			<div
 				id="flightboard-content"
 				class="tracker-wrap"
@@ -124,7 +115,7 @@ templ FlightboardPage(tenant model.Tenant, status model.TenantStatus, activeFilt
 	}
 }
 
-templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explicitTenant bool, labels model.ThemeLabels) {
+templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, explicitTenant bool, labels model.ThemeLabels, tr i18n.Translations) {
 	<div id="title-bar-wrap">
 		<div class="title-bar">
 			<div class="title-bar-left">
@@ -165,7 +156,7 @@ templ Navbar(tenant model.Tenant, roomlists []string, activeFilter string, expli
 			<div class="title-bar-right">
 				<ul class="horizontal menu fb__nav-menu-right">
 					<li id="the-clock">
-						<span id="clock">{ time.Now().Format("15:04:05") }</span>
+						<span id="clock">{ tr.FormatClock(time.Now(), tenant.Theme, true) }</span>
 					</li>
 				</ul>
 			</div>
@@ -177,7 +168,7 @@ templ FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilt
 	if status.IsStale {
 		<div class="stale-banner">
 			<span>{ fmt.Sprintf(tr.StaleBannerFmt, status.LastError) }</span>
-			<span>{ fmt.Sprintf(tr.LastSyncedFmt, status.LastSync.Format("15:04:05")) }</span>
+			<span>{ fmt.Sprintf(tr.LastSyncedFmt, tr.FormatClock(status.LastSync, tenant.Theme, true)) }</span>
 		</div>
 	}
 	if status.LastError != "" && len(status.Rooms) == 0 {
@@ -194,16 +185,16 @@ templ FlightboardRows(tenant model.Tenant, status model.TenantStatus, activeFilt
 		for _, room := range status.Rooms {
 			if roomMatchesFilter(room, activeFilter) {
 				if tenant.Theme.RowLayout == model.RowLayoutCompact {
-					@compactRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme))
+					@compactRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme), tr)
 				} else {
-					@standardRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme))
+					@standardRow(tenant, room, explicitTenant, tr.EffectiveLabels(tenant.Theme), tr)
 				}
 			}
 		}
 	}
 }
 
-templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels) {
+templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels, tr i18n.Translations) {
 	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
 		<div class="row">
 			<div class="medium-12 columns">
@@ -237,7 +228,7 @@ templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool, lab
 									data-end-ms={ strconv.FormatInt(room.Appointments[0].End, 10) }
 									data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
 								>
-									{ formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime) }
+									{ tr.FormatTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime, tenant.Theme) }
 								</div>
 								<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
 									{ room.Appointments[0].Organizer }
@@ -262,7 +253,7 @@ templ standardRow(tenant model.Tenant, room model.Room, explicitTenant bool, lab
 	</div>
 }
 
-templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels) {
+templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool, labels model.ThemeLabels, tr i18n.Translations) {
 	<div class={ "meeting-room__row row-padder roomlist-" + room.RoomlistSlug() }>
 		<div class="row">
 			<div class="medium-12 columns">
@@ -272,11 +263,11 @@ templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool, labe
 						href={ templ.SafeURL(buildURL("/single-room/"+room.RoomAlias, tenant.Slug, explicitTenant, "")) }
 						target="_blank"
 					>
-						@compactRowInner(tenant, room, labels)
+						@compactRowInner(tenant, room, labels, tr)
 					</a>
 				} else {
 					<div class={ rowCardClass(room, true) }>
-						@compactRowInner(tenant, room, labels)
+						@compactRowInner(tenant, room, labels, tr)
 					</div>
 				}
 			</div>
@@ -284,7 +275,7 @@ templ compactRow(tenant model.Tenant, room model.Room, explicitTenant bool, labe
 	</div>
 }
 
-templ compactRowInner(tenant model.Tenant, room model.Room, labels model.ThemeLabels) {
+templ compactRowInner(tenant model.Tenant, room model.Room, labels model.ThemeLabels, tr i18n.Translations) {
 	<div class="meeting-room__header">
 		<div class={ room.RoomAlias + "-name meeting-room__name" }>{ room.Name }</div>
 	</div>
@@ -316,7 +307,7 @@ templ compactRowInner(tenant model.Tenant, room model.Room, labels model.ThemeLa
 						data-end-ms={ strconv.FormatInt(room.Appointments[0].End, 10) }
 						data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
 					>
-						{ formatInitialTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime) }
+						{ tr.FormatTimeRange(room.Appointments[0].Start, room.Appointments[0].End, tenant.Theme.ShowWeekdayInTime, tenant.Theme) }
 					</div>
 					<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
 						{ room.Appointments[0].Organizer }
@@ -343,7 +334,7 @@ templ compactRowInner(tenant model.Tenant, room model.Room, labels model.ThemeLa
 						data-end-ms={ strconv.FormatInt(room.Appointments[1].End, 10) }
 						data-show-weekday={ strconv.FormatBool(tenant.Theme.ShowWeekdayInTime) }
 					>
-						{ formatInitialTimeRange(room.Appointments[1].Start, room.Appointments[1].End, tenant.Theme.ShowWeekdayInTime) }
+						{ tr.FormatTimeRange(room.Appointments[1].Start, room.Appointments[1].End, tenant.Theme.ShowWeekdayInTime, tenant.Theme) }
 					</div>
 					<div class={ room.RoomAlias + "-organizer meeting-organizer" }>
 						{ room.Appointments[1].Organizer }

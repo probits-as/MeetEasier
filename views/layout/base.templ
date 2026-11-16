@@ -66,7 +66,7 @@ templ Base(title string, tenant model.Tenant, tr i18n.Translations) {
 			@templ.Raw(buildThemeCSS(tenant))
 			<script src="/js/htmx.min.js" defer></script>
 		</head>
-		<body data-locale={ tr.Locale }>
+		<body data-locale={ tr.Locale } data-hour12={ fmt.Sprintf("%t", !tr.Use24Hour(tenant.Theme)) }>
 			{ children... }
 			<script>
 				(function () {
@@ -74,16 +74,22 @@ templ Base(title string, tenant model.Tenant, tr i18n.Translations) {
 						return (document.body && document.body.getAttribute('data-locale')) || undefined;
 					}
 
+					function isHour12() {
+						return Boolean(document.body && document.body.getAttribute('data-hour12') === 'true');
+					}
+
 					function updateClocks() {
 						var now = new Date();
 						var loc = activeLocale();
+						var h12 = isHour12();
+						var hourFmt = h12 ? 'numeric' : '2-digit';
 						var fbClock = document.getElementById('clock');
 						if (fbClock) {
-							fbClock.textContent = now.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+							fbClock.textContent = now.toLocaleTimeString(loc, { hour: hourFmt, minute: '2-digit', second: '2-digit', hour12: h12 });
 						}
 						var srTime = document.getElementById('single-room__time');
 						if (srTime) {
-							srTime.textContent = now.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+							srTime.textContent = now.toLocaleTimeString(loc, { hour: hourFmt, minute: '2-digit', hour12: h12 });
 						}
 						var srDate = document.getElementById('single-room__date');
 						if (srDate) {
@@ -93,6 +99,8 @@ templ Base(title string, tenant model.Tenant, tr i18n.Translations) {
 
 					function formatTimes() {
 						var loc = activeLocale();
+						var h12 = isHour12();
+						var hourFmt = h12 ? 'numeric' : '2-digit';
 						var els = document.querySelectorAll('[data-start-ms][data-end-ms]');
 						for (var i = 0; i < els.length; i++) {
 							var el = els[i];
@@ -104,14 +112,14 @@ templ Base(title string, tenant model.Tenant, tr i18n.Translations) {
 							var eDate = new Date(end);
 							if (showWeekday) {
 								el.textContent =
-									sDate.toLocaleTimeString(loc, { day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit' }) +
+									sDate.toLocaleTimeString(loc, { day: '2-digit', weekday: 'short', hour: hourFmt, minute: '2-digit', hour12: h12 }) +
 									' - ' +
-									eDate.toLocaleTimeString(loc, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+									eDate.toLocaleTimeString(loc, { weekday: 'short', hour: hourFmt, minute: '2-digit', hour12: h12 });
 							} else {
 								el.textContent =
-									sDate.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }) +
+									sDate.toLocaleTimeString(loc, { hour: hourFmt, minute: '2-digit', hour12: h12 }) +
 									' - ' +
-									eDate.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+									eDate.toLocaleTimeString(loc, { hour: hourFmt, minute: '2-digit', hour12: h12 });
 							}
 						}
 					}

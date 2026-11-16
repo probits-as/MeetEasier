@@ -21,6 +21,10 @@ const (
 	RowLayoutStandard = "standard"
 	RowLayoutCompact  = "compact"
 
+	TimeFormatAuto = ""
+	TimeFormat24H  = "24h"
+	TimeFormat12H  = "12h"
+
 	BookingActionBookNow   = "book_now"
 	BookingActionExtend    = "extend"
 	BookingActionEndNow    = "end_now"
@@ -49,6 +53,7 @@ type ThemeConfig struct {
 	SingleRoomLogoURL        string      `json:"single_room_logo_url"`
 	SingleRoomStatusFontSize string      `json:"single_room_status_font_size"`
 	ShowWeekdayInTime        bool        `json:"show_weekday_in_time"`
+	TimeFormat               string      `json:"time_format,omitempty"`
 	BodyBg                   string      `json:"body_bg"`
 	CardBg                   string      `json:"card_bg"`
 	CardBorder               string      `json:"card_border"`

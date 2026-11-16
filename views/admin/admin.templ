@@ -473,6 +473,14 @@ templ tenantEditor(t model.Tenant, st model.TenantStatus, tr i18n.Translations) 
 					{ tr.ShowWeekdayInTimeLabel }
 				</label>
 			</div>
+			<div class="adm-field full">
+				<label>{ tr.TimeFormatLabel }</label>
+				<select name="time_format">
+					<option value="" selected?={ t.Theme.TimeFormat == "" }>{ tr.TimeFormatAutoOption }</option>
+					<option value={ model.TimeFormat24H } selected?={ t.Theme.TimeFormat == model.TimeFormat24H }>{ tr.TimeFormat24HOption }</option>
+					<option value={ model.TimeFormat12H } selected?={ t.Theme.TimeFormat == model.TimeFormat12H }>{ tr.TimeFormat12HOption }</option>
+				</select>
+			</div>
 			<div class="adm-field">
 				<label>{ tr.NavbarLogoLabel }</label>
 				<input type="text" name="logo_url" value={ t.Theme.LogoURL }/>

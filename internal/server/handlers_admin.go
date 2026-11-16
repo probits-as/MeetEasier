@@ -339,6 +339,7 @@ func (s *Server) handleAdminTenantUpdate(w http.ResponseWriter, r *http.Request)
 		SingleRoomLogoURL:        strings.TrimSpace(r.FormValue("single_room_logo_url")),
 		SingleRoomStatusFontSize: strings.TrimSpace(r.FormValue("single_room_status_font_size")),
 		ShowWeekdayInTime:        r.FormValue("show_weekday_in_time") == "1",
+		TimeFormat:               strings.TrimSpace(r.FormValue("time_format")),
 		BodyBg:                   strings.TrimSpace(r.FormValue("body_bg")),
 		CardBg:                   strings.TrimSpace(r.FormValue("card_bg")),
 		CardBorder:               strings.TrimSpace(r.FormValue("card_border")),
