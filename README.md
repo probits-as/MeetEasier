@@ -4,6 +4,31 @@ A lightweight, multi-tenant conference room display server built in **Go** (`chi
 
 MeetEasier connects to **Microsoft Graph API** (or runs in an offline **Mock/Demo** mode) to display conference room availability on hallway flightboards and single-room tablets, with per-tenant custom domains, branding, colors, labels, and custom CSS managed from a built-in `/admin` interface or JSON import/export API.
 
+![MeetEasier Hallway Flightboard](docs/images/flightboard-standard.png)
+
+## Screenshots & Interface Tour
+
+### Hallway Flightboards
+Display all conference rooms across floors with real-time status indicators, meeting countdowns, and upcoming schedules. Choose between the classic standard flightboard or the compact two-column card layout:
+
+| Standard Theme Preset | Compact Theme Preset (2-Column) |
+|:---:|:---:|
+| [![Standard Flightboard](docs/images/flightboard-standard.png)](docs/images/flightboard-standard.png) | [![Compact Flightboard](docs/images/flightboard-compact.png)](docs/images/flightboard-compact.png) |
+
+### Outside-the-Door Tablet Displays (`/single-room/<alias>`)
+Optimized for touch tablets (e.g. iPad, Android, Kindle Fire) mounted outside conference rooms. Features high-visibility availability status and optional interactive touch booking (*Book now*, *Extend +15m*, *End early*):
+
+| Room In Use (Busy) | Room Available (Instant Touch Booking) |
+|:---:|:---:|
+| [![Single Room Busy](docs/images/single-room-busy.png)](docs/images/single-room-busy.png) | [![Single Room Available](docs/images/single-room-available.png)](docs/images/single-room-available.png) |
+
+### Built-in Admin UI & Theme Customizer (`/admin`)
+Full multi-tenant administration: configure Microsoft 365 or Mock calendar sources, custom domains, logo branding, theme presets, live color customizer, custom CSS, and JSON theme export/import:
+
+| Tenant & Calendar Provider Management | Theme Customizer, Colors & Custom CSS |
+|:---:|:---:|
+| [![Admin Tenant Dashboard](docs/images/admin-dashboard.png)](docs/images/admin-dashboard.png) | [![Admin Theme Customizer](docs/images/admin-theme-customizer.png)](docs/images/admin-theme-customizer.png) |
+
 ## Features
 
 - **Single Go binary + SQLite (`modernc.org/sqlite`)**: No Node.js, npm, or external database required.
